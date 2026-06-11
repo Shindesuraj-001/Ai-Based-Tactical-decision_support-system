@@ -1,0 +1,224 @@
+{% extends "base.html" %}
+
+{% block title %}Command Centre — ATDSS{% endblock %}
+{% block page_title %}COMMAND CENTRE{% endblock %}
+{% block breadcrumb %}Home / Dashboard{% endblock %}
+
+{% block content %}
+
+<!-- ── Stat Cards Row ─────────────────────────────── -->
+<div class="stats-grid">
+
+  <div class="stat-card stat-blue" data-anim="fade-up" data-delay="0">
+    <div class="stat-icon"><i class="fas fa-database"></i></div>
+    <div class="stat-body">
+      <div class="stat-value counter" data-target="{{ total }}">0</div>
+      <div class="stat-label">Total Simulations</div>
+    </div>
+  </div>
+
+  <div class="stat-card stat-red" data-anim="fade-up" data-delay="100">
+    <div class="stat-icon"><i class="fas fa-triangle-exclamation"></i></div>
+    <div class="stat-body">
+      <div class="stat-value counter" data-target="{{ high_risk }}">0</div>
+      <div class="stat-label">High Risk Ops</div>
+    </div>
+  </div>
+
+  <div class="stat-card stat-green" data-anim="fade-up" data-delay="200">
+    <div class="stat-icon"><i class="fas fa-percent"></i></div>
+    <div class="stat-body">
+      <div class="stat-value">{{ avg_prob }}%</div>
+      <div class="stat-label">Avg Success Prob.</div>
+    </div>
+  </div>
+
+  <div class="stat-card stat-amber" data-anim="fade-up" data-delay="300">
+    <div class="stat-icon"><i class="fas fa-circle-check"></i></div>
+    <div class="stat-body">
+      <div class="stat-value counter" data-target="{{ total - high_risk }}">0</div>
+      <div class="stat-label">Ops Cleared</div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ── Main Grid: Chart + Recent ──────────────────── -->
+<div class="dashboard-grid">
+
+  <!-- Recent simulations table -->
+  <div class="card card-wide" data-anim="fade-up" data-delay="100">
+    <div class="card-header">
+      <span><i class="fas fa-list-ul"></i> Recent Missions</span>
+      <a href="{{ url_for('simulation.simulation') }}" class="btn btn-sm btn-primary">
+        <i class="fas fa-plus"></i> New Mission
+      </a>
+    </div>
+    <div class="card-body">
+      {% if recent %}
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Mission</th><th>Terrain</th><th>Weather</th>
+              <th>Enemies</th><th>Success %</th><th>Risk</th><th>Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for s in recent %}
+            <tr class="table-row-anim">
+              <td class="mono-text">{{ s.mission_name }}</td>
+              <td>
+                <span class="badge badge-terrain-{{ s.terrain | lower }}">
+                  {{ s.terrain | title }}
+                </span>
+              </td>
+              <td>{{ s.weather | title }}</td>
+              <td>{{ s.enemy_count }}</td>
+              <td>
+                <div class="prob-bar-wrap">
+                  <div class="prob-bar" style="width:{{ s.success_prob }}%"
+                       data-prob="{{ s.success_prob }}"></div>
+                  <span>{{ s.success_prob }}%</span>
+                </div>
+              </td>
+              <td>
+                <span class="badge badge-risk-{{ s.risk_level | lower }}">
+                  {{ s.risk_level }}
+                </span>
+              </td>
+              <td>
+                <a href="{{ url_for('simulation.result', sim_id=s.id) }}"
+                   class="btn btn-sm btn-outline">
+                  <i class="fas fa-eye"></i> View
+                </a>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <div class="empty-state">
+        <i class="fas fa-crosshairs"></i>
+        <p>No simulations yet. <a href="{{ url_for('simulation.simulation') }}">Run your first mission →</a></p>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Risk Distribution Chart -->
+  <div class="card" data-anim="fade-up" data-delay="200">
+    <div class="card-header">
+      <span><i class="fas fa-chart-pie"></i> Risk Distribution</span>
+    </div>
+    <div class="card-body chart-container">
+      <canvas id="riskChart"></canvas>
+    </div>
+  </div>
+
+  <!-- Terrain Frequency Chart -->
+  <div class="card" data-anim="fade-up" data-delay="300">
+    <div class="card-header">
+      <span><i class="fas fa-mountain"></i> Terrain Operations</span>
+    </div>
+    <div class="card-body chart-container">
+      <canvas id="terrainChart"></canvas>
+    </div>
+  </div>
+
+  <!-- Quick action buttons -->
+  <div class="card" data-anim="fade-up" data-delay="400">
+    <div class="card-header">
+      <span><i class="fas fa-bolt"></i> Quick Actions</span>
+    </div>
+    <div class="card-body">
+      <div class="quick-actions">
+        <a href="{{ url_for('simulation.simulation') }}" class="qa-btn">
+          <i class="fas fa-plus-circle"></i>
+          <span>New Simulation</span>
+        </a>
+        <a href="{{ url_for('history.history') }}" class="qa-btn">
+          <i class="fas fa-history"></i>
+          <span>View History</span>
+        </a>
+        <button class="qa-btn" onclick="exportDashboard()">
+          <i class="fas fa-file-pdf"></i>
+          <span>Export Report</span>
+        </button>
+        <button class="qa-btn" onclick="refreshStats()">
+          <i class="fas fa-sync-alt"></i>
+          <span>Refresh Data</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+// ── Fetch history data and render charts ──────────────
+fetch('/api/history_data')
+  .then(r => r.json())
+  .then(sims => {
+
+    // Risk Chart
+    const riskCounts = {Low:0, Medium:0, High:0};
+    sims.forEach(s => { if (riskCounts[s.risk_level] !== undefined) riskCounts[s.risk_level]++; });
+
+    new Chart(document.getElementById('riskChart'), {
+      type: 'doughnut',
+      data: {
+        labels: ['Low Risk', 'Medium Risk', 'High Risk'],
+        datasets: [{
+          data: [riskCounts.Low, riskCounts.Medium, riskCounts.High],
+          backgroundColor: ['#22c55e','#f59e0b','#ef4444'],
+          borderColor: '#1a2010',
+          borderWidth: 3
+        }]
+      },
+      options: {
+        plugins: {
+          legend: { labels: { color: '#c8d8b4', font: { family: 'Rajdhani', size: 13 } } }
+        }
+      }
+    });
+
+    // Terrain Chart
+    const terrainCounts = {desert:0, forest:0, urban:0, mountain:0};
+    sims.forEach(s => { if (terrainCounts[s.terrain] !== undefined) terrainCounts[s.terrain]++; });
+
+    new Chart(document.getElementById('terrainChart'), {
+      type: 'bar',
+      data: {
+        labels: ['Desert','Forest','Urban','Mountain'],
+        datasets: [{
+          label: 'Operations',
+          data: Object.values(terrainCounts),
+          backgroundColor: ['#c8a84b','#4a7c59','#6b7a99','#8b7355'],
+          borderRadius: 4
+        }]
+      },
+      options: {
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { ticks: { color: '#c8d8b4', font:{family:'Rajdhani'} }, grid:{color:'#2a3520'} },
+          y: { ticks: { color: '#c8d8b4', font:{family:'Rajdhani'} }, grid:{color:'#2a3520'}, beginAtZero: true }
+        }
+      }
+    });
+
+  })
+  .catch(() => { /* No data yet */ });
+
+function exportDashboard() {
+  exportDashboardPDF();
+}
+function refreshStats() {
+  window.location.reload();
+}
+</script>
+{% endblock %}

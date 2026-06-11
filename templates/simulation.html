@@ -1,0 +1,1078 @@
+{% extends "base.html" %}
+
+{% block title %}New Simulation — ATDSS{% endblock %}
+{% block page_title %}NEW MISSION SIMULATION{% endblock %}
+{% block breadcrumb %}Home / Simulation{% endblock %}
+
+{% block content %}
+
+<div class="sim-layout">
+
+  <!-- ══ LEFT: Input Form ══════════════════════════ -->
+  <div class="sim-form-col">
+    <div class="card">
+      <div class="card-header">
+        <span><i class="fas fa-crosshairs"></i> Mission Parameters</span>
+        <span class="mono-text" style="font-size:0.75rem; color:var(--accent-amber)">⬛ TOP SECRET</span>
+      </div>
+      <div class="card-body">
+        <form id="simForm">
+
+          <!-- Mission Name -->
+          <div class="form-group">
+            <label class="form-label">Mission Code Name</label>
+            <input type="text" name="mission_name" class="form-input"
+                   placeholder="e.g. OPERATION VAJRA" required value="OPERATION ALPHA"/>
+          </div>
+
+          <div class="form-row">
+            <!-- Enemy Count -->
+            <div class="form-group">
+              <label class="form-label">Enemy Force Count</label>
+              <div class="slider-wrap">
+                <input type="range" name="enemy_count" id="enemySlider"
+                       min="1" max="200" value="20" class="range-slider"
+                       oninput="document.getElementById('enemyVal').textContent = this.value"/>
+                <div class="slider-display">
+                  <span class="mono-text" id="enemyVal">20</span>
+                  <span class="mono-text"> units</span>
+                </div>
+              </div>
+              <input type="hidden" name="enemy_count" id="enemyCountHidden" value="20"/>
+            </div>
+
+            <!-- Terrain -->
+            <div class="form-group">
+              <label class="form-label">Terrain Type</label>
+              <select name="terrain" id="terrainSelect" class="form-input select-input">
+                <option value="desert">🏜 Desert</option>
+                <option value="forest">🌲 Forest</option>
+                <option value="urban">🏙 Urban</option>
+                <option value="mountain">⛰ Mountain</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-row">
+            <!-- Weather — with auto-fetch button -->
+            <div class="form-group">
+              <label class="form-label">
+                Weather Conditions
+                <button type="button" class="btn btn-sm" id="fetchWeatherBtn"
+                        onclick="fetchWeather()"
+                        style="margin-left:0.5rem; padding:0.15rem 0.5rem; font-size:0.65rem;
+                               background:rgba(75,122,200,0.1); border:1px solid rgba(75,122,200,0.4);
+                               color:#93c5fd; border-radius:3px; cursor:pointer;">
+                  <i class="fas fa-satellite-dish"></i> AUTO-DETECT
+                </button>
+              </label>
+              <select name="weather" id="weatherSelect" class="form-input select-input">
+                <option value="clear">☀ Clear</option>
+                <option value="fog">🌫 Fog</option>
+                <option value="rain">🌧 Rain</option>
+                <option value="night">🌙 Night</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Weather Widget -->
+          <div id="weatherWidget" style="display:none; margin-bottom:1rem;">
+            <div class="weather-widget">
+              <div class="weather-widget-header">
+                <i class="fas fa-cloud-sun" id="weatherIcon"></i>
+                <span id="weatherCity" class="mono-text">Fetching...</span>
+                <span class="weather-status-badge" id="weatherStatus">LIVE</span>
+              </div>
+              <div class="weather-widget-body">
+                <div class="weather-stat">
+                  <i class="fas fa-thermometer-half"></i>
+                  <span id="weatherTemp">--</span>°C
+                </div>
+                <div class="weather-stat">
+                  <i class="fas fa-wind"></i>
+                  <span id="weatherWind">--</span> km/h
+                </div>
+                <div class="weather-stat">
+                  <i class="fas fa-tint"></i>
+                  <span id="weatherHumidity">--</span>%
+                </div>
+              </div>
+              <div class="weather-widget-desc" id="weatherDesc">Loading...</div>
+              <div class="weather-tactical" id="weatherTactical"></div>
+            </div>
+          </div>
+
+          <!-- Resources -->
+          <div class="form-group">
+            <label class="form-label">Available Resources / Weapons</label>
+            <div class="resources-grid">
+              {% set resources_list = [
+                ('rifles','Rifles','fas fa-gun'),
+                ('artillery','Artillery','fas fa-fire'),
+                ('drone','Drone','fas fa-plane'),
+                ('sniper','Sniper','fas fa-dot-circle'),
+                ('tank','Tanks','fas fa-truck-monster'),
+                ('air','Air Support','fas fa-jet-fighter'),
+                ('helicopter','Helicopter','fas fa-helicopter'),
+                ('night vision','Night Vision','fas fa-eye'),
+              ] %}
+              {% for val, label, icon in resources_list %}
+              <label class="resource-chip">
+                <input type="checkbox" class="res-check" value="{{ val }}"
+                       {% if val == 'rifles' %}checked{% endif %}/>
+                <span class="chip-inner">
+                  <i class="{{ icon }}"></i> {{ label }}
+                </span>
+              </label>
+              {% endfor %}
+            </div>
+            <input type="hidden" name="resources" id="resourcesHidden" value="rifles"/>
+          </div>
+
+          <!-- Map coords -->
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Latitude (Map Pin)</label>
+              <input type="number" name="lat" id="latInput" class="form-input mono-text"
+                     value="28.6139" step="0.0001"/>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Longitude (Map Pin)</label>
+              <input type="number" name="lng" id="lngInput" class="form-input mono-text"
+                     value="77.2090" step="0.0001"/>
+            </div>
+          </div>
+
+          <!-- Image Upload -->
+          <div class="form-group">
+            <label class="form-label">Upload Intel Images</label>
+            <div class="upload-zone" id="uploadZone">
+              <input type="file" name="images" id="imageInput"
+                     accept="image/*" multiple class="file-input"/>
+              <div class="upload-content">
+                <i class="fas fa-cloud-upload-alt upload-icon"></i>
+                <p>Drop bunker / terrain / enemy images here</p>
+                <span class="mono-text">PNG, JPG, WEBP · Max 16MB each</span>
+                <button type="button" class="btn btn-sm btn-outline"
+                        onclick="document.getElementById('imageInput').click()">
+                  Browse Files
+                </button>
+              </div>
+            </div>
+            <div class="preview-grid" id="previewGrid"></div>
+          </div>
+
+          <!-- Submit -->
+          <button type="submit" class="btn btn-primary btn-full btn-launch" id="launchBtn">
+            <i class="fas fa-rocket"></i>
+            LAUNCH TACTICAL ANALYSIS
+          </button>
+
+        </form>
+      </div>
+    </div>
+  </div><!-- /sim-form-col -->
+
+  <!-- ══ RIGHT: Map + Results ═════════════════════ -->
+  <div class="sim-result-col">
+
+    <!-- ════════════════════════════════════════════
+         ENHANCED TACTICAL MAP CARD — v2.6.0
+    ════════════════════════════════════════════ -->
+    <div class="card">
+      <div class="card-header">
+        <span><i class="fas fa-map-location-dot"></i> Tactical Map</span>
+
+        <!-- Layer toggle buttons -->
+        <div style="display:flex; gap:0.4rem; align-items:center; flex-wrap:wrap">
+
+          <button id="satToggleBtn" onclick="toggleSatellite()" title="Satellite / Street view">
+            <i class="fas fa-satellite"></i> SAT
+          </button>
+
+          <button id="heatToggleBtn" onclick="toggleHeatmap()" title="Enemy concentration heatmap">
+            <i class="fas fa-fire"></i> HEAT
+          </button>
+
+          <button id="routeToggleBtn" onclick="toggleRoutes()" title="Approach routes + danger zones">
+            <i class="fas fa-route"></i> ROUTES
+          </button>
+
+          <span class="mono-text" style="font-size:0.68rem; color:var(--text-muted)">
+            Click map to set pin
+          </span>
+        </div>
+      </div>
+
+      <div class="card-body" style="padding:0; position:relative">
+        <div id="tacticalMap" style="height:340px; width:100%;"></div>
+
+        <!-- Compact legend bar below the map canvas -->
+        <div style="padding:0.45rem 0.85rem;
+                    background:rgba(0,0,0,0.25);
+                    border-top:1px solid var(--border-dim);
+                    display:flex; gap:1rem; flex-wrap:wrap;
+                    font-size:0.72rem; align-items:center">
+          <span class="mono-text" style="font-size:0.6rem; color:var(--text-dim)">LEGEND:</span>
+          <span style="color:#ef4444"><i class="fas fa-skull-crossbones" style="font-size:0.6rem"></i> Enemy</span>
+          <span style="color:#22c55e">— Alpha Route</span>
+          <span style="color:#4b7ac8">— Bravo Route</span>
+          <span style="color:#c8a84b">— Charlie Route</span>
+          <span style="color:#f59e0b">◉ Danger Zone</span>
+          <span style="color:#ef4444"><i class="fas fa-fire" style="font-size:0.6rem"></i> Heatmap</span>
+        </div>
+      </div>
+    </div><!-- /tactical map card -->
+
+    <!-- Loading / Result panel -->
+    <div id="resultPanel" style="display:none">
+
+      <!-- Loading animation -->
+      <div class="card" id="loadingCard" style="display:none">
+        <div class="card-body" style="text-align:center; padding:2rem">
+          <div class="radar-spinner"></div>
+          <div class="mono-text" style="margin-top:1rem; color:var(--accent-green)">
+            ANALYSING TACTICAL PARAMETERS...
+          </div>
+          <div class="loading-steps" id="loadingSteps">
+            <div class="lStep" data-delay="0">▶ Parsing terrain data</div>
+            <div class="lStep" data-delay="600">▶ Evaluating enemy disposition</div>
+            <div class="lStep" data-delay="1200">▶ Running strategy engine</div>
+            <div class="lStep" data-delay="1800">▶ Computing success probability</div>
+            <div class="lStep" data-delay="2400">▶ Comparing strategies (NEW)</div>
+            <div class="lStep" data-delay="2800">▶ Generating tactical report</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Strategy Results -->
+      <div id="strategyResult" style="display:none">
+
+        <!-- Primary Strategy -->
+        <div class="card card-glow">
+          <div class="card-header">
+            <span><i class="fas fa-star"></i> PRIMARY STRATEGY</span>
+          </div>
+          <div class="card-body">
+            <div class="strategy-main" id="primaryStrategy">—</div>
+          </div>
+        </div>
+
+        <!-- Metrics -->
+        <div class="metrics-row">
+          <div class="metric-block">
+            <div class="metric-label">Success Probability</div>
+            <div class="metric-value" id="successProb">—</div>
+            <canvas id="probGauge" width="120" height="70"></canvas>
+          </div>
+          <div class="metric-block">
+            <div class="metric-label">Risk Level</div>
+            <div class="metric-value" id="riskLevel">—</div>
+            <div class="risk-bar-wrap">
+              <div class="risk-bar" id="riskBar"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Multi-Strategy Comparison Table -->
+        <div class="card" id="comparisonCard" style="display:none">
+          <div class="card-header">
+            <span><i class="fas fa-table-columns"></i> STRATEGY COMPARISON ANALYSIS</span>
+            <span class="mono-text" style="font-size:0.7rem; color:var(--accent-green2)">★ = AI RECOMMENDED</span>
+          </div>
+          <div class="card-body" style="padding:0.8rem">
+            <div class="table-wrap">
+              <table class="comparison-table" id="comparisonTable">
+                <thead>
+                  <tr>
+                    <th>Type</th><th>Strategy Name</th><th>Success %</th>
+                    <th>Risk</th><th>Est. Time</th><th>Resources</th><th>Status</th>
+                  </tr>
+                </thead>
+                <tbody id="comparisonBody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- Alternative strategies -->
+        <div class="card">
+          <div class="card-header"><span><i class="fas fa-list"></i> Alternative Plans</span></div>
+          <div class="card-body">
+            <div class="alt-strategy"><span class="alt-num">B</span><span id="alt1Text">—</span></div>
+            <div class="alt-strategy"><span class="alt-num">C</span><span id="alt2Text">—</span></div>
+          </div>
+        </div>
+
+        <!-- Image analysis (if any) -->
+        <div class="card" id="imgAnalysisCard" style="display:none">
+          <div class="card-header"><span><i class="fas fa-image"></i> Image Intel Analysis</span></div>
+          <div class="card-body" id="imgAnalysisBody"></div>
+        </div>
+
+        <!-- Analysis Notes -->
+        <div class="card">
+          <div class="card-header"><span><i class="fas fa-file-lines"></i> Tactical Assessment</span></div>
+          <div class="card-body">
+            <pre class="analysis-notes mono-text" id="analysisNotes"></pre>
+          </div>
+        </div>
+
+        <!-- War Simulation Panel -->
+        <div class="card" id="warSimPanel" style="display:none">
+          <div class="card-header">
+            <span><i class="fas fa-chess-knight"></i> WAR SIMULATION MODE</span>
+            <div style="display:flex; gap:0.5rem; align-items:center">
+              <select id="simStrategySelect" class="form-input"
+                      style="max-width:140px; padding:0.25rem 0.5rem; font-size:0.78rem">
+                <option value="aggressive">⚔ Aggressive</option>
+                <option value="defensive">🛡 Defensive</option>
+                <option value="stealth">👁 Stealth</option>
+              </select>
+              <button class="btn btn-sm btn-primary" id="startSimBtn" onclick="startWarSim()">
+                <i class="fas fa-play"></i> Start
+              </button>
+              <button class="btn btn-sm btn-outline" id="stopSimBtn"
+                      onclick="stopWarSim()" style="display:none">
+                <i class="fas fa-stop"></i> Stop
+              </button>
+            </div>
+          </div>
+          <div class="card-body" style="padding:0">
+            <div id="warSimMap" style="height:320px; width:100%;"></div>
+          </div>
+          <div class="card-body" style="padding:0.8rem">
+            <div class="phase-progress-wrap">
+              <div class="phase-progress-bar" id="phaseProgressBar" style="width:0%"></div>
+            </div>
+            <div class="phase-steps" id="phaseSteps"></div>
+            <div class="phase-info-box" id="phaseInfoBox" style="display:none">
+              <div class="phase-info-header">
+                <span class="phase-badge" id="phaseBadge">PHASE 1</span>
+                <span class="phase-name" id="phaseName">STAGING</span>
+                <span class="phase-time mono-text" id="phaseTime">T+00:00</span>
+              </div>
+              <div class="phase-desc" id="phaseDesc">—</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Action buttons -->
+        <div class="action-buttons">
+          <a id="viewResultBtn" href="#" class="btn btn-primary">
+            <i class="fas fa-expand-alt"></i> Full Report
+          </a>
+          <a id="downloadReportBtn" href="#" class="btn btn-outline" target="_blank">
+            <i class="fas fa-file-pdf"></i> Download PDF
+          </a>
+          <button class="btn btn-outline" onclick="exportResultPDF()">
+            <i class="fas fa-print"></i> Quick PDF
+          </button>
+          <!-- v2.6.0: direct link to 3D Battlefield -->
+          <a href="{{ url_for('battlefield.battlefield3d') }}" class="btn btn-outline">
+            <i class="fas fa-cube"></i> 3D View
+          </a>
+          <button class="btn btn-outline" onclick="resetForm()">
+            <i class="fas fa-redo"></i> New Sim
+          </button>
+        </div>
+
+      </div><!-- /strategyResult -->
+    </div><!-- /resultPanel -->
+
+  </div><!-- /sim-result-col -->
+</div><!-- /sim-layout -->
+
+{% endblock %}
+
+
+{% block extra_scripts %}
+<style>
+/* ── Map toggle buttons (inline because they sit in card-header) ── */
+#satToggleBtn, #heatToggleBtn, #routeToggleBtn {
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  padding: 0.22rem 0.55rem;
+  border-radius: 3px;
+  cursor: pointer;
+  transition: all 0.2s;
+  border: 1px solid;
+}
+#satToggleBtn  { background:rgba(75,122,200,0.1);  border-color:rgba(75,122,200,0.4);  color:#93c5fd; }
+#heatToggleBtn { background:rgba(200,75,75,0.1);   border-color:rgba(200,75,75,0.4);   color:#fca5a5; }
+#routeToggleBtn{ background:rgba(34,197,94,0.1);   border-color:rgba(34,197,94,0.4);   color:#86efac; }
+#satToggleBtn.active  { background:rgba(75,122,200,0.45);  border-color:#4b7ac8;  color:#fff; }
+#heatToggleBtn.active { background:rgba(200,75,75,0.45);   border-color:#c84b4b;  color:#fff; }
+#routeToggleBtn.active{ background:rgba(34,197,94,0.45);   border-color:#22c55e;  color:#fff; }
+</style>
+
+<script>
+/* =============================================================
+   simulation.html — JavaScript v2.6.0
+   SECTIONS:
+     1. MAP SETUP — satellite / heatmap / route layers
+     2. FORM SYNC
+     3. WEATHER FETCH
+     4. FORM SUBMIT & RESULTS
+     5. WAR SIMULATION ANIMATION
+     6. UTILITY FUNCTIONS
+============================================================= */
+
+/* ════════════════════════════════════════════════════════════
+   SECTION 1 — MAP SETUP  (v2.6.0)
+════════════════════════════════════════════════════════════ */
+
+/* ── Tile layers ─────────────────────────────────────────── */
+const tileOSM = L.tileLayer(
+  'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+  { attribution: '© OpenStreetMap', maxZoom: 19 }
+);
+const tileSat = L.tileLayer(
+  'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+  { attribution: 'Tiles © Esri', maxZoom: 19 }
+);
+const tileSatLabels = L.tileLayer(
+  'https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}',
+  { attribution: 'Labels © Esri', maxZoom: 19 }
+);
+
+/* ── Create map ──────────────────────────────────────────── */
+const map = L.map('tacticalMap').setView([28.6139, 77.2090], 5);
+tileOSM.addTo(map);
+
+/* ── Toggle state ────────────────────────────────────────── */
+let isSatOn    = false;
+let isHeatOn   = false;
+let isRoutesOn = false;
+
+/* ── Enhanced layer stores ───────────────────────────────── */
+let heatLayer    = null;
+let routeLayers  = [];
+let dangerLayers = [];
+let eLayers      = [];      // enemy markers from map_data API
+let mapDataCache = null;    // avoid re-fetching when toggling
+
+/* ── Existing marker for the sim pin ─────────────────────── */
+let marker = null;
+const dangerZones = [];     // risk circles drawn by showResults()
+
+const enemyIcon = L.divIcon({
+  html: '<div class="map-marker enemy-marker"><i class="fas fa-skull-crossbones"></i></div>',
+  className: '', iconSize: [36,36], iconAnchor: [18,18]
+});
+
+/* ── Click map → move pin + optionally refresh layers ──────── */
+map.on('click', function(e) {
+  const lat = e.latlng.lat.toFixed(4);
+  const lng = e.latlng.lng.toFixed(4);
+  document.getElementById('latInput').value = lat;
+  document.getElementById('lngInput').value = lng;
+  placeMapMarker(lat, lng);
+  if (isHeatOn || isRoutesOn) {
+    mapDataCache = null;          // force re-fetch at new location
+    _refreshVisibleLayers();
+  }
+});
+
+function placeMapMarker(lat, lng) {
+  if (marker) map.removeLayer(marker);
+  marker = L.marker([lat, lng], { icon: enemyIcon })
+    .addTo(map)
+    .bindPopup('<b>Enemy Position</b><br>' + lat + ', ' + lng)
+    .openPopup();
+}
+
+/* ── SATELLITE TOGGLE ────────────────────────────────────── */
+function toggleSatellite() {
+  isSatOn = !isSatOn;
+  const btn = document.getElementById('satToggleBtn');
+  btn.classList.toggle('active', isSatOn);
+  if (isSatOn) {
+    map.removeLayer(tileOSM);
+    tileSat.addTo(map);
+    tileSatLabels.addTo(map);
+  } else {
+    map.removeLayer(tileSat);
+    map.removeLayer(tileSatLabels);
+    tileOSM.addTo(map);
+  }
+}
+
+/* ── HEATMAP TOGGLE ─────────────────────────────────────── */
+async function toggleHeatmap() {
+  isHeatOn = !isHeatOn;
+  document.getElementById('heatToggleBtn').classList.toggle('active', isHeatOn);
+  if (isHeatOn) {
+    await _ensureMapData();
+    if (heatLayer) heatLayer.addTo(map);
+  } else {
+    if (heatLayer) map.removeLayer(heatLayer);
+  }
+}
+
+/* ── ROUTES TOGGLE ──────────────────────────────────────── */
+async function toggleRoutes() {
+  isRoutesOn = !isRoutesOn;
+  document.getElementById('routeToggleBtn').classList.toggle('active', isRoutesOn);
+  if (isRoutesOn) {
+    await _ensureMapData();
+    routeLayers.forEach(l  => l.addTo(map));
+    dangerLayers.forEach(l => l.addTo(map));
+    eLayers.forEach(l      => l.addTo(map));
+  } else {
+    routeLayers.forEach(l  => { try { map.removeLayer(l); } catch(_){} });
+    dangerLayers.forEach(l => { try { map.removeLayer(l); } catch(_){} });
+    eLayers.forEach(l      => { try { map.removeLayer(l); } catch(_){} });
+  }
+}
+
+/* ── Fetch /api/map_data and build all layer objects ────── */
+async function _ensureMapData() {
+  // If layers already built for this location, skip the fetch
+  if (mapDataCache) return;
+
+  const lat     = parseFloat(document.getElementById('latInput').value)  || 28.6139;
+  const lng     = parseFloat(document.getElementById('lngInput').value)  || 77.2090;
+  const enemies = parseInt(document.getElementById('enemySlider').value) || 20;
+  const terrain = document.getElementById('terrainSelect').value         || 'desert';
+
+  try {
+    const resp = await fetch(
+      `/api/map_data?lat=${lat}&lng=${lng}&enemy_count=${enemies}&terrain=${terrain}`
+    );
+    const data = await resp.json();
+    if (data.status !== 'success') return;
+
+    mapDataCache = data;
+    _clearEnhancedLayers();
+
+    /* ── Small enemy markers (distinct from the main pin) ── */
+    const eIcon = L.divIcon({
+      html: `<div style="
+               width:20px;height:20px;border-radius:50%;
+               background:rgba(200,75,75,0.88);border:2px solid #ff4444;
+               display:flex;align-items:center;justify-content:center;
+               color:white;font-size:0.55rem;">
+               <i class="fas fa-skull-crossbones"></i>
+             </div>`,
+      className: '', iconSize: [20,20], iconAnchor: [10,10]
+    });
+    (data.enemies || []).forEach(e => {
+      eLayers.push(
+        L.marker([e.lat, e.lng], { icon: eIcon })
+         .bindPopup(`<b>Enemy ${e.type.toUpperCase()}</b><br>Strength: <b>${e.strength}</b> units`)
+      );
+    });
+
+    /* ── Colour-coded approach routes ─────────────────────── */
+    (data.routes || []).forEach(r => {
+      const latlngs = r.points.map(p => [p.lat, p.lng]);
+      routeLayers.push(
+        L.polyline(latlngs, {
+          color: r.color, weight: r.weight || 3,
+          opacity: 0.88, dashArray: r.dash || '8,5'
+        }).bindPopup(`<b>${r.name}</b>`)
+      );
+    });
+
+    /* ── Danger zone circles ─────────────────────────────── */
+    (data.danger_zones || []).forEach(z => {
+      const c    = z.intensity === 'High'   ? '#ef4444'
+                 : z.intensity === 'Medium' ? '#f59e0b' : '#22c55e';
+      const fill = z.intensity === 'High'   ? 0.20
+                 : z.intensity === 'Medium' ? 0.13     : 0.07;
+      dangerLayers.push(
+        L.circle([z.lat, z.lng], {
+          radius: z.radius, color: c,
+          fillColor: c, fillOpacity: fill, weight: 2
+        }).bindPopup(`<b>${z.type.replace(/_/g,' ').toUpperCase()}</b><br>Intensity: <b>${z.intensity}</b>`)
+      );
+    });
+
+    /* ── Heatmap (needs Leaflet.heat — loaded in base.html) ── */
+    if (typeof L.heatLayer === 'function' && (data.heatmap_points || []).length) {
+      heatLayer = L.heatLayer(data.heatmap_points, {
+        radius: 24, blur: 18, maxZoom: 17, max: 1.0,
+        gradient: { 0.2:'#22c55e', 0.5:'#f59e0b', 0.8:'#ef4444', 1.0:'#ff0000' }
+      });
+    }
+
+  } catch(err) {
+    console.warn('[EnhancedMap] API error:', err);
+  }
+}
+
+/* ── Remove all enhanced layers from map ────────────────── */
+function _clearEnhancedLayers() {
+  [...routeLayers, ...dangerLayers, ...eLayers].forEach(l => {
+    try { map.removeLayer(l); } catch(_) {}
+  });
+  if (heatLayer) { try { map.removeLayer(heatLayer); } catch(_) {} }
+  routeLayers = []; dangerLayers = []; eLayers = []; heatLayer = null;
+}
+
+/* ── Re-show only the layers that are currently active ──── */
+async function _refreshVisibleLayers() {
+  _clearEnhancedLayers();
+  await _ensureMapData();
+  if (isHeatOn   && heatLayer)            heatLayer.addTo(map);
+  if (isRoutesOn) {
+    routeLayers.forEach(l  => l.addTo(map));
+    dangerLayers.forEach(l => l.addTo(map));
+    eLayers.forEach(l      => l.addTo(map));
+  }
+}
+
+
+/* ════════════════════════════════════════════════════════════
+   SECTION 2 — FORM SYNC
+════════════════════════════════════════════════════════════ */
+const slider = document.getElementById('enemySlider');
+slider.addEventListener('input', () => {
+  document.getElementById('enemyCountHidden').value = slider.value;
+});
+
+document.querySelectorAll('.res-check')
+        .forEach(cb => cb.addEventListener('change', updateResources));
+
+function updateResources() {
+  const checked = [...document.querySelectorAll('.res-check:checked')].map(c => c.value);
+  document.getElementById('resourcesHidden').value = checked.join(', ') || 'rifles';
+}
+
+/* ── Drag & drop images ────────────────────────────────── */
+const uploadZone = document.getElementById('uploadZone');
+uploadZone.addEventListener('dragover', e => {
+  e.preventDefault();
+  uploadZone.classList.add('drag-over');
+});
+uploadZone.addEventListener('dragleave', () => uploadZone.classList.remove('drag-over'));
+uploadZone.addEventListener('drop', e => {
+  e.preventDefault();
+  uploadZone.classList.remove('drag-over');
+  const dt = new DataTransfer();
+  [...e.dataTransfer.files].forEach(f => dt.items.add(f));
+  document.getElementById('imageInput').files = dt.files;
+  previewImages(document.getElementById('imageInput'));
+});
+document.getElementById('imageInput').addEventListener('change', function() {
+  previewImages(this);
+});
+
+function previewImages(input) {
+  const grid = document.getElementById('previewGrid');
+  grid.innerHTML = '';
+  [...input.files].forEach(f => {
+    const reader = new FileReader();
+    reader.onload = e => {
+      const div = document.createElement('div');
+      div.className = 'preview-item';
+      div.innerHTML = `<img src="${e.target.result}" alt="intel"/>
+                       <span class="mono-text">${f.name}</span>`;
+      grid.appendChild(div);
+    };
+    reader.readAsDataURL(f);
+  });
+}
+
+
+/* ════════════════════════════════════════════════════════════
+   SECTION 3 — WEATHER FETCH
+════════════════════════════════════════════════════════════ */
+async function fetchWeather() {
+  const lat = document.getElementById('latInput').value  || 28.6139;
+  const lng = document.getElementById('lngInput').value  || 77.2090;
+  const btn = document.getElementById('fetchWeatherBtn');
+
+  btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Fetching...';
+  btn.disabled  = true;
+
+  try {
+    const resp = await fetch(`/api/weather?lat=${lat}&lng=${lng}`);
+    const data = await resp.json();
+
+    document.getElementById('weatherSelect').value          = data.weather_type;
+    document.getElementById('weatherWidget').style.display  = 'block';
+    document.getElementById('weatherCity').textContent      = data.city        || 'Unknown';
+    document.getElementById('weatherTemp').textContent      = data.temperature ?? '--';
+    document.getElementById('weatherWind').textContent      = data.wind_speed  ?? '--';
+    document.getElementById('weatherHumidity').textContent  = data.humidity    ?? '--';
+    document.getElementById('weatherDesc').textContent      = data.description || '--';
+    document.getElementById('weatherTactical').textContent  = '⚡ ' + (data.tactical_impact || '');
+
+    const sb         = document.getElementById('weatherStatus');
+    sb.textContent   = data.status === 'mock' ? 'DEMO' : 'LIVE';
+    sb.className     = 'weather-status-badge ' + (data.status === 'mock' ? 'badge-mock' : 'badge-live');
+
+    document.getElementById('weatherWidget').classList.add('weather-flash');
+    setTimeout(() => document.getElementById('weatherWidget').classList.remove('weather-flash'), 600);
+
+  } catch(err) {
+    alert('Weather fetch failed: ' + err.message);
+  } finally {
+    btn.innerHTML = '<i class="fas fa-satellite-dish"></i> AUTO-DETECT';
+    btn.disabled  = false;
+  }
+}
+
+
+/* ════════════════════════════════════════════════════════════
+   SECTION 4 — FORM SUBMIT & RESULTS
+════════════════════════════════════════════════════════════ */
+let currentSimData = null;
+
+document.getElementById('simForm').addEventListener('submit', async function(e) {
+  e.preventDefault();
+  updateResources();
+  document.getElementById('enemyCountHidden').value = slider.value;
+
+  const formData = new FormData(this);
+  [...document.getElementById('imageInput').files]
+    .forEach(f => formData.append('images', f));
+
+  document.getElementById('resultPanel').style.display    = 'block';
+  document.getElementById('loadingCard').style.display    = 'block';
+  document.getElementById('strategyResult').style.display = 'none';
+  document.getElementById('launchBtn').disabled  = true;
+  document.getElementById('launchBtn').innerHTML =
+    '<i class="fas fa-spinner fa-spin"></i> ANALYSING...';
+
+  document.querySelectorAll('.lStep').forEach(s => {
+    s.style.opacity = '0';
+    setTimeout(() => s.style.opacity = '1', parseInt(s.dataset.delay));
+  });
+
+  try {
+    const res  = await fetch('/api/run_simulation', { method:'POST', body:formData });
+    const data = await res.json();
+
+    if (data.status === 'success') {
+      await delay(3000);
+      currentSimData = data.result;
+      showResults(data.result);
+    } else {
+      alert('Analysis failed: ' + data.message);
+      resetLoading();
+    }
+  } catch(err) {
+    alert('Network error: ' + err.message);
+    resetLoading();
+  }
+});
+
+function delay(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+function showResults(r) {
+  document.getElementById('loadingCard').style.display    = 'none';
+  document.getElementById('strategyResult').style.display = 'block';
+
+  document.getElementById('primaryStrategy').textContent = r.primary_strategy;
+  document.getElementById('alt1Text').textContent        = r.alt_strategy1;
+  document.getElementById('alt2Text').textContent        = r.alt_strategy2;
+  document.getElementById('successProb').textContent     = r.success_prob + '%';
+  document.getElementById('riskLevel').textContent       = r.risk_level;
+  document.getElementById('analysisNotes').textContent   = r.analysis_notes;
+
+  const riskBar = document.getElementById('riskBar');
+  riskBar.style.width = r.risk_score + '%';
+  riskBar.className   = 'risk-bar risk-' + r.risk_level.toLowerCase();
+
+  document.getElementById('viewResultBtn').href     = '/result/' + r.sim_id;
+  document.getElementById('downloadReportBtn').href = '/api/generate_report/' + r.sim_id;
+
+  drawGauge(r.success_prob);
+  updateMap(r);
+
+  if (r.strategy_comparison && r.strategy_comparison.length) {
+    showComparisonTable(r.strategy_comparison);
+  }
+  if (r.image_analyses && r.image_analyses.length) {
+    showImageAnalysis(r.image_analyses);
+  }
+
+  document.getElementById('warSimPanel').style.display = 'block';
+
+  /* ── v2.6.0: Refresh enhanced layers after analysis (new lat/lng may apply) ── */
+  mapDataCache = null;
+  if (isHeatOn || isRoutesOn) _refreshVisibleLayers();
+
+  document.getElementById('launchBtn').disabled  = false;
+  document.getElementById('launchBtn').innerHTML =
+    '<i class="fas fa-rocket"></i> LAUNCH TACTICAL ANALYSIS';
+
+  document.getElementById('strategyResult').scrollIntoView({ behavior: 'smooth' });
+}
+
+/* ── Strategy Comparison Table ─────────────────────────── */
+function showComparisonTable(strategies) {
+  const tbody = document.getElementById('comparisonBody');
+  tbody.innerHTML = strategies.map(s => {
+    const recClass = s.is_recommended ? 'comparison-row-recommended' : '';
+    const recBadge = s.is_recommended
+      ? '<span class="best-strategy-badge">★ BEST</span>'
+      : '<span style="color:var(--text-dim)">—</span>';
+    return `
+      <tr class="${recClass}">
+        <td>
+          <span class="strategy-type-badge strat-${s.strategy_type.toLowerCase()}">
+            ${s.strategy_type}
+          </span>
+        </td>
+        <td class="mono-text" style="font-size:0.8rem">${s.strategy_name}</td>
+        <td>
+          <div class="prob-bar-wrap">
+            <div class="prob-bar" style="width:${s.success_prob}%"></div>
+            <span>${s.success_prob}%</span>
+          </div>
+        </td>
+        <td><span class="badge badge-risk-${s.risk_level.toLowerCase()}">${s.risk_level}</span></td>
+        <td class="mono-text" style="font-size:0.78rem">${s.estimated_time}</td>
+        <td>
+          <span class="resource-badge res-${s.resource_usage.toLowerCase().replace(' ','-')}">
+            ${s.resource_usage}
+          </span>
+        </td>
+        <td>${recBadge}</td>
+      </tr>`;
+  }).join('');
+  document.getElementById('comparisonCard').style.display = 'block';
+}
+
+
+/* ════════════════════════════════════════════════════════════
+   SECTION 5 — WAR SIMULATION ANIMATION
+════════════════════════════════════════════════════════════ */
+let warSimMap     = null;
+let warSimData    = null;
+let warSimPhase   = 0;
+let warSimTimeout = null;
+let warSimLayers  = [];
+
+const _enemyIcon = L.divIcon({
+  html: '<div class="map-marker enemy-marker"><i class="fas fa-skull-crossbones"></i></div>',
+  className: '', iconSize: [32,32], iconAnchor: [16,16]
+});
+const _friendlyIcons = {
+  infantry: L.divIcon({ html:'<div class="map-marker friendly-marker"><i class="fas fa-person-military-rifle"></i></div>', className:'', iconSize:[32,32], iconAnchor:[16,16] }),
+  armor:    L.divIcon({ html:'<div class="map-marker armor-marker"><i class="fas fa-truck-monster"></i></div>',            className:'', iconSize:[32,32], iconAnchor:[16,16] }),
+  sf:       L.divIcon({ html:'<div class="map-marker sf-marker"><i class="fas fa-user-ninja"></i></div>',                  className:'', iconSize:[32,32], iconAnchor:[16,16] }),
+  sniper:   L.divIcon({ html:'<div class="map-marker sniper-marker"><i class="fas fa-crosshairs"></i></div>',              className:'', iconSize:[32,32], iconAnchor:[16,16] }),
+};
+
+async function startWarSim() {
+  if (!currentSimData) { alert('Run a simulation first!'); return; }
+
+  const stratType = document.getElementById('simStrategySelect').value;
+  const lat       = parseFloat(document.getElementById('latInput').value);
+  const lng       = parseFloat(document.getElementById('lngInput').value);
+  const terrain   = document.getElementById('terrainSelect').value;
+  const weather   = document.getElementById('weatherSelect').value;
+  const enemy     = document.getElementById('enemySlider').value;
+
+  document.getElementById('startSimBtn').style.display = 'none';
+  document.getElementById('stopSimBtn').style.display  = 'block';
+
+  const url = `/api/simulation_steps?lat=${lat}&lng=${lng}&terrain=${terrain}&weather=${weather}&enemy_count=${enemy}&strategy_type=${stratType}`;
+  try {
+    const resp = await fetch(url);
+    const json = await resp.json();
+    if (json.status !== 'success') throw new Error(json.message);
+    warSimData  = json.data;
+    warSimPhase = 0;
+
+    initWarMap(lat, lng);
+    buildPhaseSteps(warSimData.phases);
+    playPhase(0);
+  } catch(e) {
+    alert('Simulation error: ' + e.message);
+    stopWarSim();
+  }
+}
+
+function initWarMap(lat, lng) {
+  if (!warSimMap) {
+    warSimMap = L.map('warSimMap').setView([lat, lng], 8);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(warSimMap);
+  } else {
+    warSimMap.setView([lat, lng], 8);
+  }
+}
+
+function clearWarLayers() {
+  warSimLayers.forEach(l => { try { warSimMap.removeLayer(l); } catch(e){} });
+  warSimLayers = [];
+}
+
+function buildPhaseSteps(phases) {
+  document.getElementById('phaseSteps').innerHTML = phases.map((p, i) =>
+    `<div class="phase-step" id="phaseStep${i}" onclick="jumpToPhase(${i})">
+       <div class="phase-step-num">${p.phase}</div>
+       <div class="phase-step-name">${p.name}</div>
+     </div>`
+  ).join('');
+}
+
+function playPhase(idx) {
+  if (!warSimData || idx >= warSimData.phases.length) {
+    stopWarSim(); return;
+  }
+  warSimPhase = idx;
+  const step  = warSimData.phases[idx];
+  clearWarLayers();
+
+  /* Friendly unit */
+  const fIcon = _friendlyIcons[step.friendly_type] || _friendlyIcons.infantry;
+  warSimLayers.push(
+    L.marker([step.friendly_lat, step.friendly_lng], { icon: fIcon })
+     .addTo(warSimMap)
+     .bindPopup(`<b>Friendly Forces</b><br>${step.name}`)
+  );
+  warSimLayers.push(
+    L.circle([step.friendly_lat, step.friendly_lng],
+      { color:'#22c55e', fillOpacity:0.10, radius:8000 }).addTo(warSimMap)
+  );
+
+  /* Enemy markers */
+  warSimData.enemy_positions.forEach((ep, i) => {
+    if (step.active.includes(i)) {
+      warSimLayers.push(
+        L.marker([ep.lat, ep.lng], { icon: _enemyIcon })
+         .addTo(warSimMap)
+         .bindPopup(`<b>Enemy Cluster ${i+1}</b><br>${ep.count} units`)
+      );
+      warSimLayers.push(
+        L.circle([ep.lat, ep.lng],
+          { color:'#ef4444', fillOpacity:0.10, radius:5000 }).addTo(warSimMap)
+      );
+    }
+  });
+
+  /* Movement path line */
+  if (idx > 0) {
+    warSimLayers.push(
+      L.polyline(
+        [[step.friendly_lat, step.friendly_lng],
+         [warSimData.objective.lat, warSimData.objective.lng]],
+        { color:'#4a7c59', weight:2, dashArray:'6,6', opacity:0.6 }
+      ).addTo(warSimMap)
+    );
+  }
+
+  updatePhaseUI(step, idx);
+  document.getElementById('phaseProgressBar').style.width =
+    Math.round(((idx + 1) / warSimData.phases.length) * 100) + '%';
+
+  document.querySelectorAll('.phase-step').forEach((el, i) => {
+    el.classList.toggle('phase-step-active', i === idx);
+    el.classList.toggle('phase-step-done',   i  < idx);
+  });
+
+  warSimTimeout = setTimeout(() => playPhase(idx + 1), 3500);
+}
+
+function jumpToPhase(idx) {
+  clearTimeout(warSimTimeout);
+  playPhase(idx);
+}
+
+function updatePhaseUI(step, idx) {
+  document.getElementById('phaseInfoBox').style.display = 'block';
+  document.getElementById('phaseBadge').textContent = `PHASE ${step.phase}`;
+  document.getElementById('phaseName').textContent  = step.name;
+  document.getElementById('phaseTime').textContent  = step.time;
+  document.getElementById('phaseDesc').textContent  = step.desc;
+}
+
+function stopWarSim() {
+  clearTimeout(warSimTimeout);
+  document.getElementById('startSimBtn').style.display = 'block';
+  document.getElementById('stopSimBtn').style.display  = 'none';
+}
+
+
+/* ════════════════════════════════════════════════════════════
+   SECTION 6 — UTILITY FUNCTIONS
+════════════════════════════════════════════════════════════ */
+function drawGauge(prob) {
+  const canvas = document.getElementById('probGauge');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const cx = canvas.width / 2, cy = canvas.height;
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.beginPath();
+  ctx.arc(cx, cy, 55, Math.PI, 0);
+  ctx.strokeStyle = '#2a3520'; ctx.lineWidth = 10; ctx.stroke();
+  const angle = Math.PI * (prob / 100);
+  ctx.beginPath();
+  ctx.arc(cx, cy, 55, Math.PI, Math.PI + angle);
+  ctx.strokeStyle = prob > 66 ? '#22c55e' : prob > 33 ? '#f59e0b' : '#ef4444';
+  ctx.lineWidth = 10; ctx.stroke();
+}
+
+function updateMap(r) {
+  const lat = parseFloat(document.getElementById('latInput').value);
+  const lng = parseFloat(document.getElementById('lngInput').value);
+  if (marker) map.removeLayer(marker);
+  marker = L.marker([lat, lng], { icon: enemyIcon })
+    .addTo(map)
+    .bindPopup(
+      `<b>${r.mission_name}</b><br>Risk: ${r.risk_level}<br>${r.primary_strategy}`
+    ).openPopup();
+  dangerZones.forEach(z => map.removeLayer(z));
+  const circle = L.circle([lat, lng], {
+    color: r.risk_level === 'High'   ? '#ef4444'
+         : r.risk_level === 'Medium' ? '#f59e0b' : '#22c55e',
+    fillOpacity: 0.15, radius: 20000
+  }).addTo(map);
+  dangerZones.push(circle);
+  map.setView([lat, lng], 7);
+}
+
+function showImageAnalysis(analyses) {
+  document.getElementById('imgAnalysisCard').style.display = 'block';
+  document.getElementById('imgAnalysisBody').innerHTML = analyses.map(a => `
+    <div class="img-analysis-row">
+      ${a.path ? `<img src="${a.path.replace('static/','/static/')}" class="intel-thumb"/>` : ''}
+      <div class="analysis-stats">
+        <div class="as-row"><span>Inferred Type</span>    <span class="mono-text">${a.inferred_type}</span></div>
+        <div class="as-row"><span>Objects Detected</span><span class="mono-text">${a.objects_detected}</span></div>
+        <div class="as-row"><span>Edge Density</span>     <span class="mono-text">${a.edge_density}%</span></div>
+        <div class="as-row"><span>Threat Estimate</span>  <span class="mono-text">${a.threat_estimate} units</span></div>
+      </div>
+    </div>`).join('');
+}
+
+function resetLoading() {
+  document.getElementById('loadingCard').style.display  = 'none';
+  document.getElementById('resultPanel').style.display  = 'none';
+  document.getElementById('launchBtn').disabled = false;
+  document.getElementById('launchBtn').innerHTML =
+    '<i class="fas fa-rocket"></i> LAUNCH TACTICAL ANALYSIS';
+}
+
+function resetForm() {
+  document.getElementById('simForm').reset();
+  document.getElementById('resultPanel').style.display  = 'none';
+  document.getElementById('previewGrid').innerHTML = '';
+  document.getElementById('weatherWidget').style.display = 'none';
+  slider.value = 20;
+  document.getElementById('enemyVal').textContent = '20';
+  stopWarSim();
+  mapDataCache = null;
+}
+
+function exportResultPDF() {
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF();
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(18);
+  doc.text('TACTICAL DECISION SUPPORT SYSTEM', 15, 20);
+  doc.setFontSize(12); doc.setFont('helvetica', 'normal');
+  doc.text('Primary Strategy: ' + document.getElementById('primaryStrategy').textContent, 15, 35);
+  doc.text('Success %: '        + document.getElementById('successProb').textContent, 15, 45);
+  doc.text('Risk Level: '       + document.getElementById('riskLevel').textContent,   15, 55);
+  const notes = document.getElementById('analysisNotes').textContent;
+  doc.text(doc.splitTextToSize(notes, 180), 15, 70);
+  doc.save('ATDSS_Quick_Report.pdf');
+}
+</script>
+{% endblock %}

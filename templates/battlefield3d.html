@@ -1,0 +1,925 @@
+{% extends "base.html" %}
+
+{% block title %}3D Battlefield — ATDSS{% endblock %}
+{% block page_title %}3D BATTLEFIELD VISUALIZATION{% endblock %}
+{% block breadcrumb %}Home / 3D Battlefield{% endblock %}
+
+{% block extra_head %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+
+<style>
+/* ═══════════════════════════════════════════════════════════
+   LAYOUT  v4.0.0
+═══════════════════════════════════════════════════════════ */
+.page-content { overflow: visible !important; }
+
+.bf-layout {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 1rem;
+}
+
+/* LEFT SIDEBAR */
+.bf-sidebar {
+  width: 272px;
+  min-width: 272px;
+  flex-shrink: 0;
+  position: sticky;
+  top: 0;
+  max-height: calc(100vh - var(--topbar-height,60px) - 1rem);
+  overflow-y: auto;
+  overflow-x: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  padding-right: 3px;
+  padding-bottom: 1.5rem;
+  scrollbar-width: thin;
+  scrollbar-color: #3d5a2a #0d1208;
+}
+.bf-sidebar::-webkit-scrollbar       { width: 5px; }
+.bf-sidebar::-webkit-scrollbar-track { background: #0d1208; }
+.bf-sidebar::-webkit-scrollbar-thumb { background: #3d5a2a; border-radius: 3px; }
+.bf-sidebar::-webkit-scrollbar-thumb:hover { background: #c8a84b; }
+
+.bf-sidebar > .card,
+.bf-sidebar > a.btn { flex-shrink: 0 !important; overflow: visible !important; }
+.bf-sidebar .card-body { overflow: visible !important; }
+
+/* RIGHT CANVAS */
+.bf-canvas-col {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+}
+
+#bf3dContainer {
+  width: 100%;
+  height: calc(100vh - var(--topbar-height,60px) - 4.5rem);
+  min-height: 480px;
+  max-height: 840px;
+  background: #0d1208;
+  border: 1px solid var(--border-dim);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  position: relative;
+}
+#bf3dContainer canvas {
+  position: absolute !important;
+  inset: 0 !important;
+  width:  100% !important;
+  height: 100% !important;
+  display: block;
+}
+
+/* LOADING OVERLAY */
+.bf-loading {
+  position: absolute; inset: 0;
+  background: rgba(13,18,8,0.93);
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  gap: 0.5rem; z-index: 20;
+  transition: opacity 0.4s ease;
+}
+.bf-loading.hidden { opacity: 0; pointer-events: none; }
+
+/* CANVAS OVERLAYS */
+.bf-stats-overlay {
+  position: absolute; top: 10px; right: 10px;
+  background: rgba(13,18,8,0.88);
+  border: 1px solid var(--border-dim);
+  border-radius: var(--radius);
+  padding: 0.55rem 0.85rem;
+  font-family: var(--font-mono); font-size: 0.7rem;
+  color: var(--text-muted); z-index: 10;
+  line-height: 1.95; pointer-events: none; min-width: 175px;
+}
+.ov-row { display: flex; justify-content: space-between; gap: 1rem; }
+.ov-val { color: var(--accent-amber); font-weight: 700; }
+.ov-en  { color: #ef4444 !important; }
+.ov-fr  { color: #22c55e !important; }
+
+/* Command mode banner */
+.cmd-banner {
+  position: absolute; top: 10px; left: 50%; transform: translateX(-50%);
+  background: rgba(0,255,136,0.15);
+  border: 1px solid #00ff88;
+  border-radius: var(--radius);
+  padding: 0.3rem 0.9rem;
+  font-family: var(--font-mono); font-size: 0.72rem;
+  color: #00ff88; z-index: 10; pointer-events: none;
+  display: none; letter-spacing: 0.08em;
+  animation: cmdPulse 1s ease-in-out infinite;
+}
+@keyframes cmdPulse { 0%,100%{opacity:1} 50%{opacity:0.55} }
+
+/* Selected unit info */
+.sel-info {
+  position: absolute; bottom: 52px; left: 10px;
+  background: rgba(13,18,8,0.88);
+  border: 1px solid #00ff88;
+  border-radius: var(--radius);
+  padding: 0.4rem 0.75rem;
+  font-family: var(--font-mono); font-size: 0.68rem;
+  color: #00ff88; z-index: 10; pointer-events: none;
+  display: none; line-height: 1.7;
+}
+
+.bf-hint {
+  position: absolute; bottom: 10px; left: 10px;
+  background: rgba(13,18,8,0.80);
+  border: 1px solid var(--border-dim); border-radius: var(--radius);
+  padding: 0.4rem 0.65rem;
+  font-family: var(--font-mono); font-size: 0.6rem;
+  color: var(--text-dim); z-index: 10; line-height: 1.75;
+  pointer-events: none; display: flex; flex-direction: column;
+}
+
+.cam-btns {
+  position: absolute; bottom: 10px; right: 10px;
+  display: flex; flex-direction: column; gap: 0.3rem; z-index: 10;
+}
+.cam-btn {
+  background: rgba(13,18,8,0.85);
+  border: 1px solid var(--border-dim); border-radius: var(--radius);
+  color: var(--text-muted); font-family: var(--font-mono);
+  font-size: 0.62rem; padding: 0.28rem 0.55rem;
+  cursor: pointer; transition: all 0.2s; white-space: nowrap;
+}
+.cam-btn:hover { border-color: var(--accent-amber); color: var(--accent-amber); }
+.cam-btn.active { border-color: #00ff88; color: #00ff88; }
+
+/* SIDEBAR COMPONENTS */
+.stat-row-sm {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 0.3rem 0; border-bottom: 1px solid rgba(255,255,255,0.04);
+  font-size: 0.82rem; color: var(--text-muted);
+}
+.stat-row-sm:last-child { border-bottom: none; }
+.stat-val-sm { font-family: var(--font-mono); font-size: 0.8rem; color: var(--accent-amber); font-weight: 700; }
+
+.bf-legend { display: flex; flex-wrap: wrap; gap: 0.65rem; }
+.lg-item   { display: flex; align-items: center; gap: 0.35rem; font-size: 0.78rem; color: var(--text-muted); }
+.lg-box    { width: 11px; height: 11px; border-radius: 2px; flex-shrink: 0; }
+.lg-line   { width: 18px; height: 0; border-bottom: 2px dashed; flex-shrink: 0; }
+
+/* Kill board */
+.kill-board {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  gap: 0.4rem;
+  align-items: center;
+  text-align: center;
+  padding: 0.3rem 0;
+}
+.kill-side { display: flex; flex-direction: column; align-items: center; }
+.kill-label { font-family: var(--font-mono); font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-dim); }
+.kill-count { font-family: var(--font-display); font-size: 1.65rem; font-weight: 900; line-height: 1; }
+.kill-ia  { color: #22c55e; }
+.kill-en  { color: #ef4444; }
+.kill-vs  { font-family: var(--font-display); font-size: 0.75rem; color: var(--text-dim); }
+
+/* Combat status */
+.combat-status {
+  display: inline-flex; align-items: center; gap: 0.4rem;
+  padding: 0.3rem 0.7rem; border-radius: 3px;
+  font-family: var(--font-mono); font-size: 0.72rem; font-weight: 700;
+  letter-spacing: 0.05em; border: 1px solid; transition: all 0.3s;
+}
+.status-staging  { color:#93c5fd; background:rgba(75,122,200,0.12);  border-color:rgba(75,122,200,0.35); }
+.status-engaging { color:#fde68a; background:rgba(245,158,11,0.12);  border-color:rgba(245,158,11,0.35); animation:statusPulse 1s ease-in-out infinite; }
+.status-combat   { color:#fca5a5; background:rgba(200,75,75,0.15);   border-color:rgba(200,75,75,0.45);  animation:statusPulse 0.6s ease-in-out infinite; }
+.status-victory  { color:#86efac; background:rgba(34,197,94,0.15);   border-color:rgba(34,197,94,0.45); }
+@keyframes statusPulse { 0%,100%{opacity:1} 50%{opacity:0.55} }
+
+/* Command mode button */
+.cmd-mode-btn {
+  width: 100%; padding: 0.55rem; font-size: 0.82rem;
+  justify-content: center; transition: all 0.2s;
+}
+.cmd-mode-btn.active {
+  background: rgba(0,255,136,0.15) !important;
+  border-color: #00ff88 !important;
+  color: #00ff88 !important;
+}
+
+/* Camera mode buttons */
+.cam-mode-grid {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 0.4rem;
+}
+.cam-mode-btn {
+  font-size: 0.75rem; padding: 0.4rem 0.5rem;
+  justify-content: center; text-align: center;
+}
+.cam-mode-btn.active {
+  background: rgba(200,168,75,0.2) !important;
+  border-color: var(--accent-amber) !important;
+  color: var(--accent-amber) !important;
+}
+
+/* Map sync button */
+.map-sync-btn {
+  width: 100%; font-size: 0.78rem; justify-content: center;
+  background: rgba(75,122,200,0.1); border-color: rgba(75,122,200,0.4); color: #93c5fd;
+}
+.map-sync-btn:hover { background: rgba(75,122,200,0.25); }
+
+/* Scroll hint */
+.sb-scroll-hint {
+  text-align: center; font-family: var(--font-mono);
+  font-size: 0.6rem; color: var(--text-dim); padding: 0.2rem 0;
+  animation: sbPulse 2.5s ease-in-out infinite; user-select: none;
+}
+@keyframes sbPulse { 0%,100%{opacity:.3} 50%{opacity:.9} }
+
+/* Behaviour state badge */
+.behavior-badge {
+  font-size: 0.65rem; padding: 0.15rem 0.45rem;
+  border-radius: 3px; font-family: var(--font-mono); font-weight: 700;
+}
+.beh-patrol  { background:rgba(34,197,94,0.12);  border:1px solid rgba(34,197,94,0.35);  color:#86efac; }
+.beh-cover   { background:rgba(245,158,11,0.12); border:1px solid rgba(245,158,11,0.35); color:#fde68a; }
+.beh-retreat { background:rgba(200,75,75,0.12);  border:1px solid rgba(200,75,75,0.35);  color:#fca5a5; }
+.beh-command { background:rgba(0,255,136,0.12);  border:1px solid rgba(0,255,136,0.35);  color:#00ff88; }
+
+/* Responsive */
+@media (max-width: 960px) {
+  .bf-layout { flex-direction: column; }
+  .bf-sidebar { width:100%; min-width:unset; position:static; max-height:none; overflow-y:visible; padding-right:0; }
+  #bf3dContainer { height:440px; min-height:360px; max-height:none; }
+}
+@media (max-width: 600px) {
+  #bf3dContainer { height: 320px; }
+  .bf-hint { display: none; }
+}
+</style>
+{% endblock %}
+
+
+{% block content %}
+<div class="bf-layout">
+
+  <!-- ═══════════════════════════════════════════════
+       SIDEBAR
+  ═══════════════════════════════════════════════ -->
+  <div class="bf-sidebar" id="bfSidebar">
+
+    <!-- ① Scenario Setup ────────────────────────── -->
+    <div class="card">
+      <div class="card-header">
+        <span><i class="fas fa-sliders"></i> SCENARIO SETUP</span>
+        <span class="mono-text" style="font-size:0.6rem;color:var(--accent-red)">⬛ TOP SECRET</span>
+      </div>
+      <div class="card-body">
+
+        <div class="form-group">
+          <label class="form-label">Terrain Type</label>
+          <select id="bf_terrain" class="form-input select-input">
+            <option value="desert">🏜 Desert</option>
+            <option value="forest">🌲 Forest</option>
+            <option value="urban">🏙 Urban</option>
+            <option value="mountain">⛰ Mountain</option>
+          </select>
+        </div>
+
+        <!-- Enemy count -->
+        <div class="form-group">
+          <label class="form-label">
+            Enemy Force:&nbsp;
+            <span id="bf_enemyVal" class="mono-text" style="color:#ef4444">20</span>
+            <span class="mono-text"> units</span>
+          </label>
+          <div class="slider-wrap">
+            <input type="range" id="bf_enemySlider" min="5" max="50" value="20"
+                   class="range-slider"
+                   oninput="document.getElementById('bf_enemyVal').textContent=this.value"/>
+          </div>
+        </div>
+
+        <!-- ── NEW v4.0: Our Army count ───────────── -->
+        <div class="form-group">
+          <label class="form-label">
+            Our Army:&nbsp;
+            <span id="bf_friendlyVal" class="mono-text" style="color:#22c55e">8</span>
+            <span class="mono-text"> soldiers</span>
+          </label>
+          <div class="slider-wrap">
+            <input type="range" id="bf_friendlySlider" min="2" max="20" value="8"
+                   class="range-slider"
+                   style="accent-color:#22c55e"
+                   oninput="document.getElementById('bf_friendlyVal').textContent=this.value"/>
+          </div>
+        </div>
+        <!-- ──────────────────────────────────────── -->
+
+        <div class="form-group">
+          <label class="form-label">Approach Strategy</label>
+          <select id="bf_strategy" class="form-input select-input">
+            <option value="aggressive">⚔ Aggressive</option>
+            <option value="stealth">👁 Stealth</option>
+            <option value="defensive">🛡 Defensive</option>
+          </select>
+        </div>
+
+        <button class="btn btn-primary btn-full btn-launch"
+                id="bf_loadBtn" onclick="loadScene()">
+          <i class="fas fa-cube"></i> LOAD 3D BATTLEFIELD
+        </button>
+
+      </div>
+    </div>
+
+    <!-- ② Kill Counter ───────────────────────────── -->
+    <div class="card">
+      <div class="card-header">
+        <span><i class="fas fa-crosshairs"></i> KILL COUNTER</span>
+        <span id="combatStatus" class="combat-status status-staging">
+          <span class="pulse-dot" style="width:6px;height:6px"></span>
+          STAGING
+        </span>
+      </div>
+      <div class="card-body">
+        <div class="kill-board">
+          <div class="kill-side">
+            <div class="kill-label">🇮🇳 Indian Army</div>
+            <div class="kill-count kill-ia" id="killIndian">0</div>
+          </div>
+          <div class="kill-vs">VS</div>
+          <div class="kill-side">
+            <div class="kill-label">💀 Enemy</div>
+            <div class="kill-count kill-en" id="killEnemy">0</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ③ Battle Stats ──────────────────────────── -->
+    <div class="card">
+      <div class="card-header"><span><i class="fas fa-chart-bar"></i> BATTLE STATS</span></div>
+      <div class="card-body">
+        <div class="stat-row-sm">
+          <span>🟢 Indian Army</span>
+          <span class="stat-val-sm" id="st_friendly" style="color:#22c55e">—</span>
+        </div>
+        <div class="stat-row-sm">
+          <span>🔴 Enemy Force</span>
+          <span class="stat-val-sm" id="st_enemies" style="color:#ef4444">—</span>
+        </div>
+        <div class="stat-row-sm">
+          <span>Strategy</span>
+          <span class="stat-val-sm" id="st_strategy">—</span>
+        </div>
+        <div class="stat-row-sm">
+          <span>Terrain</span>
+          <span class="stat-val-sm" id="st_terrain">—</span>
+        </div>
+        <div class="stat-row-sm">
+          <span>Approach Paths</span>
+          <span class="stat-val-sm" id="st_paths">—</span>
+        </div>
+        <div class="stat-row-sm">
+          <span>Render Status</span>
+          <span class="stat-val-sm" style="color:#22c55e">● LIVE</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ④ NEW v4.0: Camera System ───────────────── -->
+    <div class="card">
+      <div class="card-header"><span><i class="fas fa-video"></i> CAMERA SYSTEM</span></div>
+      <div class="card-body">
+        <div class="cam-mode-grid" style="margin-bottom:0.5rem">
+          <button class="btn btn-outline cam-mode-btn active" id="camFreeBtn"
+                  onclick="setCamMode('free')">
+            <i class="fas fa-hand-pointer"></i> Free
+          </button>
+          <button class="btn btn-outline cam-mode-btn" id="camTopBtn"
+                  onclick="setCamMode('top')">
+            <i class="fas fa-arrow-down"></i> Top
+          </button>
+          <button class="btn btn-outline cam-mode-btn" id="camFollowBtn"
+                  onclick="setCamMode('follow')">
+            <i class="fas fa-person-running"></i> Follow
+          </button>
+          <button class="btn btn-outline cam-mode-btn" id="camSideBtn"
+                  onclick="if(bf){bf.sideView();updateCamBtns('free');}">
+            <i class="fas fa-arrows-left-right"></i> Side
+          </button>
+        </div>
+        <button class="btn btn-outline btn-full"
+                onclick="if(bf){bf.focusObjective();updateCamBtns('free');}">
+          <i class="fas fa-crosshairs"></i> Focus Objective
+        </button>
+        <p class="mono-text" style="font-size:0.62rem;color:var(--text-dim);margin-top:0.6rem;line-height:1.6">
+          Follow mode tracks selected unit.<br>
+          Click a soldier first to select it.
+        </p>
+      </div>
+    </div>
+
+    <!-- ⑤ NEW v4.0: Command Mode ─────────────────── -->
+    <div class="card">
+      <div class="card-header">
+        <span><i class="fas fa-gamepad"></i> COMMAND MODE</span>
+        <span class="mono-text" style="font-size:0.62rem;color:var(--text-dim)">v4.0</span>
+      </div>
+      <div class="card-body">
+        <button class="btn btn-outline cmd-mode-btn" id="cmdModeBtn"
+                onclick="toggleCommandMode()">
+          <i class="fas fa-location-crosshairs"></i> Enable Command Mode
+        </button>
+        <p class="mono-text" style="font-size:0.62rem;color:var(--text-dim);margin-top:0.6rem;line-height:1.6">
+          1. Click a 🟢 friendly soldier to select.<br>
+          2. Enable Command Mode.<br>
+          3. Click terrain to send unit there.
+        </p>
+        <!-- Selected unit display -->
+        <div id="selectedUnitInfo" style="display:none;margin-top:0.7rem;
+             padding:0.5rem;background:rgba(0,255,136,0.06);
+             border:1px solid rgba(0,255,136,0.25);border-radius:var(--radius)">
+          <div class="mono-text" style="font-size:0.68rem;color:#00ff88;margin-bottom:0.3rem">
+            ● UNIT SELECTED
+          </div>
+          <div class="stat-row-sm">
+            <span>HP</span><span class="stat-val-sm" id="selHP" style="color:#00ff88">—</span>
+          </div>
+          <div class="stat-row-sm">
+            <span>State</span><span id="selState">—</span>
+          </div>
+          <button class="btn btn-sm btn-outline" style="width:100%;margin-top:0.4rem"
+                  onclick="if(bf)bf.clearSelection();hideSelectedInfo()">
+            <i class="fas fa-times"></i> Deselect
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ⑥ NEW v4.0: Map ↔ 3D Sync ──────────────── -->
+    <div class="card">
+      <div class="card-header">
+        <span><i class="fas fa-map-location-dot"></i> MAP ↔ 3D SYNC</span>
+        <span class="mono-text" style="font-size:0.6rem;color:var(--accent-blue)">v4.0</span>
+      </div>
+      <div class="card-body">
+        <p class="mono-text" style="font-size:0.68rem;color:var(--text-dim);margin-bottom:0.6rem;line-height:1.6">
+          Jump 3D camera to a grid coordinate:
+        </p>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.4rem;margin-bottom:0.5rem">
+          <div>
+            <label class="form-label" style="font-size:0.62rem">X (East-West)</label>
+            <input type="number" id="sync_x" class="form-input mono-text"
+                   value="0" step="5" style="padding:0.35rem 0.5rem;font-size:0.8rem"/>
+          </div>
+          <div>
+            <label class="form-label" style="font-size:0.62rem">Z (North-South)</label>
+            <input type="number" id="sync_z" class="form-input mono-text"
+                   value="-40" step="5" style="padding:0.35rem 0.5rem;font-size:0.8rem"/>
+          </div>
+        </div>
+        <button class="btn map-sync-btn" onclick="syncCamera()">
+          <i class="fas fa-arrows-to-dot"></i> Sync Camera to Position
+        </button>
+        <div style="margin-top:0.5rem;display:grid;grid-template-columns:1fr 1fr;gap:0.35rem">
+          <button class="btn btn-outline btn-sm" onclick="syncPreset('objective')">★ Objective</button>
+          <button class="btn btn-outline btn-sm" onclick="syncPreset('friendly')">🟢 Start</button>
+          <button class="btn btn-outline btn-sm" onclick="syncPreset('flankL')">← Flank L</button>
+          <button class="btn btn-outline btn-sm" onclick="syncPreset('flankR')">→ Flank R</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ⑦ Unit Behaviour Log ────────────────────── -->
+    <div class="card">
+      <div class="card-header">
+        <span><i class="fas fa-brain"></i> AI BEHAVIOUR LOG</span>
+      </div>
+      <div class="card-body" style="padding:0.6rem">
+        <div id="behaviorLog"
+             style="font-family:var(--font-mono);font-size:0.62rem;
+                    color:var(--text-muted);max-height:130px;overflow-y:auto;
+                    line-height:1.7;scrollbar-width:thin">
+          Waiting for simulation…
+        </div>
+      </div>
+    </div>
+
+    <!-- ⑧ Legend ────────────────────────────────── -->
+    <div class="card">
+      <div class="card-header"><span><i class="fas fa-list"></i> LEGEND</span></div>
+      <div class="card-body">
+        <div class="bf-legend">
+          <div class="lg-item"><div class="lg-box" style="background:#4B5320"></div>Indian Army</div>
+          <div class="lg-item"><div class="lg-box" style="background:#8B7355"></div>Enemy</div>
+          <div class="lg-item"><div class="lg-box" style="background:#c8a84b"></div>Objective</div>
+          <div class="lg-item"><div class="lg-box" style="background:#FF5500"></div>Explosion</div>
+          <div class="lg-item"><div class="lg-box" style="background:#00ff88"></div>Selected</div>
+          <div class="lg-item"><div class="lg-box" style="background:#00ffff"></div>Cmd Target</div>
+          <div class="lg-item"><div class="lg-line" style="border-color:#ef4444"></div>Aggressive</div>
+          <div class="lg-item"><div class="lg-line" style="border-color:#22c55e"></div>Stealth</div>
+          <div class="lg-item"><div class="lg-line" style="border-color:#4b7ac8"></div>Defensive</div>
+        </div>
+        <p class="mono-text" style="font-size:0.65rem;color:var(--text-dim);margin-top:0.7rem;line-height:1.65">
+          🧠 Units auto-patrol, take cover, and retreat based on HP &amp; enemy distance.<br>
+          🖱 Click unit → select. Click terrain → move (Command Mode).<br>
+          📸 Camera: Free / Top-down / Follow selected unit.
+        </p>
+      </div>
+    </div>
+
+    <!-- ⑨ Quick Actions ─────────────────────────── -->
+    <div class="card">
+      <div class="card-header"><span><i class="fas fa-bolt"></i> QUICK ACTIONS</span></div>
+      <div class="card-body" style="display:flex;flex-direction:column;gap:0.5rem">
+        <a href="{{ url_for('simulation.simulation') }}" class="btn btn-outline btn-full">
+          <i class="fas fa-crosshairs"></i> New Simulation
+        </a>
+        <a href="{{ url_for('simulation.dashboard') }}" class="btn btn-outline btn-full">
+          <i class="fas fa-chart-line"></i> Dashboard
+        </a>
+        <a href="{{ url_for('history.history') }}" class="btn btn-outline btn-full">
+          <i class="fas fa-clock-rotate-left"></i> Mission History
+        </a>
+        <button class="btn btn-outline btn-full" onclick="toggleGrid()">
+          <i class="fas fa-border-all"></i> Toggle Grid
+        </button>
+      </div>
+    </div>
+
+    <div class="sb-scroll-hint" id="sbHint">↕ scroll for all controls ↕</div>
+
+  </div><!-- /bf-sidebar -->
+
+
+  <!-- ═══════════════════════════════════════════════
+       RIGHT — Three.js canvas
+  ═══════════════════════════════════════════════ -->
+  <div class="bf-canvas-col">
+
+    <div id="bf3dContainer">
+
+      <!-- Loading overlay -->
+      <div class="bf-loading" id="bf_loading">
+        <div class="radar-spinner" style="width:56px;height:56px"></div>
+        <div class="mono-text"
+             style="color:var(--accent-green2);font-size:0.9rem;margin-top:0.4rem">
+          INITIALIZING WAR SIMULATION
+        </div>
+        <div class="mono-text"
+             style="color:var(--text-dim);font-size:0.72rem" id="bf_loadMsg">
+          Deploying Indian Army units…
+        </div>
+      </div>
+
+      <!-- Canvas overlay — top-right -->
+      <div class="bf-stats-overlay">
+        <div class="ov-row"><span>🟢 Indian Army</span><span class="ov-val ov-fr" id="ov_friendly">—</span></div>
+        <div class="ov-row"><span>🔴 Enemy</span><span class="ov-val ov-en" id="ov_enemies">—</span></div>
+        <div class="ov-row"><span>💀 IA Kills</span><span class="ov-val" id="ov_kills_ia" style="color:#22c55e">0</span></div>
+        <div class="ov-row"><span>☠ En Kills</span><span class="ov-val" id="ov_kills_en" style="color:#ef4444">0</span></div>
+        <div class="ov-row"><span>🎯 Mode</span><span class="ov-val" id="ov_mode">—</span></div>
+        <div class="ov-row"><span>📷 Camera</span><span class="ov-val" id="ov_cam">FREE</span></div>
+      </div>
+
+      <!-- Command mode banner — top-centre -->
+      <div class="cmd-banner" id="cmdBanner">
+        ⌖ COMMAND MODE ACTIVE — Click terrain to move selected unit
+      </div>
+
+      <!-- Selected unit info — bottom-left above hint -->
+      <div class="sel-info" id="canvasSelInfo">
+        <div>● UNIT SELECTED</div>
+        <div id="canvasSelHP">HP: —</div>
+        <div id="canvasSelBeh">State: patrol</div>
+      </div>
+
+      <!-- Controls hint — bottom-left -->
+      <div class="bf-hint">
+        <span>🖱 Left-drag  → Rotate (Free mode)</span>
+        <span>🖱 Right-drag → Pan</span>
+        <span>🖱 Scroll     → Zoom</span>
+        <span>🖱 Click unit → Select</span>
+        <span>⌖ Cmd Mode   → Click terrain to move</span>
+      </div>
+
+      <!-- Camera presets — bottom-right -->
+      <div class="cam-btns">
+        <button class="cam-btn active" id="cbFree" onclick="setCamMode('free')">⟳ Free</button>
+        <button class="cam-btn" id="cbTop" onclick="setCamMode('top')">⬇ Top</button>
+        <button class="cam-btn" id="cbFollow" onclick="setCamMode('follow')">▶ Follow</button>
+        <button class="cam-btn" id="cbObj" onclick="if(bf){bf.focusObjective();updateCamBtns('free');}">★ Obj</button>
+      </div>
+
+    </div><!-- /bf3dContainer -->
+
+    <!-- Info bar -->
+    <div class="card">
+      <div class="card-body" style="padding:0.55rem 1rem">
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:0.5rem">
+          <div class="bf-legend" style="gap:0.55rem">
+            <div class="lg-item"><div class="lg-box" style="background:#4B5320"></div>Indian Army (INSAS)</div>
+            <div class="lg-item"><div class="lg-box" style="background:#8B7355"></div>Enemy (AK-47)</div>
+            <div class="lg-item"><div class="lg-box" style="background:#00ff88"></div>Selected Unit</div>
+            <div class="lg-item"><div class="lg-box" style="background:#c8a84b"></div>Objective</div>
+          </div>
+          <div class="mono-text" id="bf_statusBar"
+               style="font-size:0.7rem;color:var(--text-dim);text-align:right">
+            Select a scenario and click LOAD 3D BATTLEFIELD
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /bf-canvas-col -->
+
+</div><!-- /bf-layout -->
+{% endblock %}
+
+
+{% block extra_scripts %}
+<script src="{{ url_for('static', filename='js/battlefield3d.js') }}"></script>
+<script>
+/* ==========================================================
+   battlefield3d.html — controller  v4.0.0
+========================================================== */
+let bf          = null;
+let gridVisible = true;
+let cmdModeOn   = false;
+let selPollTimer = null;
+
+window.addEventListener('DOMContentLoaded', () => {
+  setTimeout(() => loadScene(), 350);
+
+  /* Scroll-hint logic */
+  const sidebar = document.getElementById('bfSidebar');
+  const hint    = document.getElementById('sbHint');
+  const checkHint = () => {
+    hint.style.display = sidebar.scrollHeight > sidebar.clientHeight + 4 ? '' : 'none';
+  };
+  checkHint();
+  window.addEventListener('resize', checkHint);
+  sidebar.addEventListener('scroll', () => { hint.style.display = 'none'; }, { once: true });
+});
+
+/* ── Load / rebuild 3D war scene ─────────────────────────── */
+async function loadScene() {
+  const terrain       = document.getElementById('bf_terrain').value;
+  const enemies       = parseInt(document.getElementById('bf_enemySlider').value);
+  const strategy      = document.getElementById('bf_strategy').value;
+  const friendlyCount = parseInt(document.getElementById('bf_friendlySlider').value); // NEW
+
+  showLoading(true);
+  setCombatStatus('staging');
+
+  const msgs = [
+    'Building procedural terrain…',
+    'Deploying Indian Army units…',
+    'Positioning enemy forces…',
+    'Arming soldiers…',
+    'Calculating approach paths…',
+    'Starting combat simulation…',
+    'Ready — battle commencing!',
+  ];
+  let mi = 0;
+  const msgEl  = document.getElementById('bf_loadMsg');
+  const ticker = setInterval(() => {
+    msgEl.textContent = msgs[Math.min(mi++, msgs.length - 1)];
+  }, 400);
+
+  const btn = document.getElementById('bf_loadBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> DEPLOYING…';
+
+  try {
+    if (!bf) {
+      bf = new BattlefieldScene('bf3dContainer');
+      bf.onKill = (counts) => updateKillCounter(counts);
+
+      /* Wire unit-selection callback */
+      bf.onUnitSelected = (unit) => showSelectedInfo(unit);
+    }
+
+    const data = await bf.loadData(terrain, enemies, strategy, friendlyCount); // NEW param
+
+    /* Sidebar stats */
+    document.getElementById('st_enemies').textContent  = data.enemies.length;
+    document.getElementById('st_friendly').textContent = data.friendly.length;
+    document.getElementById('st_strategy').textContent = strategy.toUpperCase();
+    document.getElementById('st_terrain').textContent  = terrain.toUpperCase();
+    document.getElementById('st_paths').textContent    = data.paths.length;
+
+    /* Canvas overlay */
+    document.getElementById('ov_enemies').textContent  = data.enemies.length;
+    document.getElementById('ov_friendly').textContent = data.friendly.length;
+    document.getElementById('ov_mode').textContent     = strategy.toUpperCase();
+
+    /* Reset kills */
+    document.getElementById('killIndian').textContent  = '0';
+    document.getElementById('killEnemy').textContent   = '0';
+    document.getElementById('ov_kills_ia').textContent = '0';
+    document.getElementById('ov_kills_en').textContent = '0';
+
+    document.getElementById('bf_statusBar').textContent =
+      `LIVE: ${terrain.toUpperCase()} · ${strategy.toUpperCase()} · IA ${data.friendly.length} vs ENEMY ${data.enemies.length}`;
+
+    setCombatStatus('engaging');
+    startBehaviorPoll();
+
+  } catch (err) {
+    document.getElementById('bf_statusBar').textContent = '⚠ Error: ' + err.message;
+    console.error('[Battlefield3D]', err);
+  }
+
+  clearInterval(ticker);
+  showLoading(false);
+  btn.disabled  = false;
+  btn.innerHTML = '<i class="fas fa-cube"></i> LOAD 3D BATTLEFIELD';
+}
+
+/* ── Kill counter ──────────────────────────────────────────── */
+function updateKillCounter(counts) {
+  document.getElementById('killIndian').textContent  = counts.indian;
+  document.getElementById('killEnemy').textContent   = counts.enemy;
+  document.getElementById('ov_kills_ia').textContent = counts.indian;
+  document.getElementById('ov_kills_en').textContent = counts.enemy;
+
+  if (!bf) return;
+  const totalEnemy  = bf.enemyGroups.length;
+  const totalIndian = bf.indianGroups.length;
+  const deadEnemy   = bf.enemyGroups.filter(e => e.userData.isDead).length;
+  const deadIndian  = bf.indianGroups.filter(e => e.userData.isDead).length;
+
+  if (deadEnemy >= totalEnemy) {
+    setCombatStatus('victory');
+    document.getElementById('bf_statusBar').textContent =
+      '🏆 VICTORY — Indian Army has eliminated all enemy forces!';
+  } else if (deadIndian >= totalIndian) {
+    setCombatStatus('combat');
+    document.getElementById('bf_statusBar').textContent =
+      '⚠ DEFEAT — Indian Army units eliminated. Reload to retry.';
+  } else if (counts.indian > 0 || counts.enemy > 0) {
+    setCombatStatus('combat');
+  }
+}
+
+/* ── Combat status badge ───────────────────────────────────── */
+const STATUS_MAP = {
+  staging:  { cls: 'status-staging',  icon: '●', text: 'STAGING'  },
+  engaging: { cls: 'status-engaging', icon: '◆', text: 'ENGAGING' },
+  combat:   { cls: 'status-combat',   icon: '⚔', text: 'COMBAT'   },
+  victory:  { cls: 'status-victory',  icon: '★', text: 'VICTORY'  },
+};
+function setCombatStatus(key) {
+  const el = document.getElementById('combatStatus');
+  if (!el) return;
+  const s = STATUS_MAP[key] || STATUS_MAP.staging;
+  el.className = `combat-status ${s.cls}`;
+  el.innerHTML = `${s.icon} ${s.text}`;
+}
+
+/* ── Grid toggle ───────────────────────────────────────────── */
+function toggleGrid() {
+  if (!bf) return;
+  gridVisible = !gridVisible;
+  const g = bf.scene.getObjectByName('grid');
+  if (g) g.visible = gridVisible;
+}
+
+/* ── Loading overlay ───────────────────────────────────────── */
+function showLoading(show) {
+  const el = document.getElementById('bf_loading');
+  if (show) el.classList.remove('hidden');
+  else setTimeout(() => el.classList.add('hidden'), 600);
+}
+
+/* ══════════════════════════════════════════════════════════
+   v4.0 — CAMERA MODE CONTROLLER
+══════════════════════════════════════════════════════════ */
+function setCamMode(mode) {
+  if (!bf) return;
+  bf.setCameraMode(mode);
+  updateCamBtns(mode);
+  document.getElementById('ov_cam').textContent = mode.toUpperCase();
+}
+
+function updateCamBtns(active) {
+  ['Free','Top','Follow'].forEach(m => {
+    const sb = document.getElementById('cam' + m + 'Btn');
+    const cb = document.getElementById('cb'  + m);
+    if (sb) sb.classList.toggle('active', m.toLowerCase() === active);
+    if (cb) cb.classList.toggle('active', m.toLowerCase() === active);
+  });
+}
+
+/* ══════════════════════════════════════════════════════════
+   v4.0 — COMMAND MODE CONTROLLER
+══════════════════════════════════════════════════════════ */
+function toggleCommandMode() {
+  if (!bf) { alert('Load the battlefield first.'); return; }
+  cmdModeOn = !cmdModeOn;
+  bf.setCommandMode(cmdModeOn);
+
+  const btn    = document.getElementById('cmdModeBtn');
+  const banner = document.getElementById('cmdBanner');
+  btn.classList.toggle('active', cmdModeOn);
+  btn.innerHTML = cmdModeOn
+    ? '<i class="fas fa-xmark"></i> Disable Command Mode'
+    : '<i class="fas fa-location-crosshairs"></i> Enable Command Mode';
+  banner.style.display = cmdModeOn ? 'block' : 'none';
+}
+
+/* ══════════════════════════════════════════════════════════
+   v4.0 — SELECTED UNIT INFO PANEL
+══════════════════════════════════════════════════════════ */
+function showSelectedInfo(unit) {
+  document.getElementById('selectedUnitInfo').style.display = 'block';
+  document.getElementById('canvasSelInfo').style.display    = 'block';
+  updateSelPanel(unit);
+}
+
+function hideSelectedInfo() {
+  document.getElementById('selectedUnitInfo').style.display = 'none';
+  document.getElementById('canvasSelInfo').style.display    = 'none';
+}
+
+function updateSelPanel(unit) {
+  if (!unit) return;
+  const ud  = unit.userData;
+  const hp  = Math.round(ud.health);
+  const beh = ud.commandTarget ? 'command' : (ud.behaviorState || 'patrol');
+  const hpEl = document.getElementById('selHP');
+  if (hpEl) hpEl.textContent = hp + ' / ' + ud.maxHealth;
+
+  const stEl = document.getElementById('selState');
+  if (stEl) {
+    stEl.className = 'behavior-badge beh-' + beh;
+    stEl.textContent = beh.toUpperCase();
+  }
+
+  const cHp  = document.getElementById('canvasSelHP');
+  const cBeh = document.getElementById('canvasSelBeh');
+  if (cHp)  cHp.textContent  = 'HP: ' + hp + ' / ' + ud.maxHealth;
+  if (cBeh) cBeh.textContent = 'State: ' + beh;
+}
+
+/* Poll selected unit state every 500ms */
+function startBehaviorPoll() {
+  if (selPollTimer) clearInterval(selPollTimer);
+  selPollTimer = setInterval(() => {
+    if (!bf) return;
+    if (bf.selectedUnit && !bf.selectedUnit.userData.isDead) {
+      updateSelPanel(bf.selectedUnit);
+    } else if (bf.selectedUnit && bf.selectedUnit.userData.isDead) {
+      hideSelectedInfo();
+      bf.clearSelection();
+    }
+    updateBehaviorLog();
+  }, 500);
+}
+
+/* Live behaviour log */
+function updateBehaviorLog() {
+  if (!bf) return;
+  const log = document.getElementById('behaviorLog');
+  if (!log) return;
+  const lines = [];
+  bf.indianGroups.slice(0, 6).forEach((u, i) => {
+    if (!u.userData) return;
+    const ud  = u.userData;
+    const beh = ud.isDead ? '☠ DEAD' : ud.commandTarget ? '⌖ CMD' : ud.isShooting ? '🔥 SHOOT' : (ud.behaviorState || 'patrol').toUpperCase();
+    const hp  = Math.round(ud.health);
+    lines.push(`IA-${i + 1}: ${beh.padEnd(8)} HP:${hp}`);
+  });
+  log.textContent = lines.length ? lines.join('\n') : 'No units loaded.';
+}
+
+/* ══════════════════════════════════════════════════════════
+   v4.0 — MAP ↔ 3D SYNC
+══════════════════════════════════════════════════════════ */
+function syncCamera() {
+  if (!bf) { alert('Load the battlefield first.'); return; }
+  const x = parseFloat(document.getElementById('sync_x').value) || 0;
+  const z = parseFloat(document.getElementById('sync_z').value) || 0;
+  bf.syncToWorldPosition(x, z);
+  updateCamBtns('free');
+  document.getElementById('ov_cam').textContent = 'SYNCED';
+}
+
+function syncPreset(preset) {
+  const presets = {
+    objective: { x:  0, z: -40 },
+    friendly:  { x:  0, z:  70 },
+    flankL:    { x: -80, z:  10 },
+    flankR:    { x:  80, z:  10 },
+  };
+  const p = presets[preset];
+  if (!p || !bf) return;
+  document.getElementById('sync_x').value = p.x;
+  document.getElementById('sync_z').value = p.z;
+  syncCamera();
+}
+</script>
+{% endblock %}

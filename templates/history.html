@@ -1,0 +1,280 @@
+{% extends "base.html" %}
+
+{% block title %}Mission History — ATDSS{% endblock %}
+{% block page_title %}MISSION HISTORY{% endblock %}
+{% block breadcrumb %}Home / History{% endblock %}
+
+{% block content %}
+
+<div class="history-controls">
+  <input type="text" id="searchInput" class="form-input search-input"
+         placeholder="🔍 Search missions..." oninput="filterTable()"/>
+  <select id="terrainFilter" class="form-input" style="max-width:160px" onchange="filterTable()">
+    <option value="">All Terrain</option>
+    <option>desert</option><option>forest</option><option>urban</option><option>mountain</option>
+  </select>
+  <select id="riskFilter" class="form-input" style="max-width:140px" onchange="filterTable()">
+    <option value="">All Risk</option>
+    <option>Low</option><option>Medium</option><option>High</option>
+  </select>
+  <a href="{{ url_for('simulation.simulation') }}" class="btn btn-primary">
+    <i class="fas fa-plus"></i> New Mission
+  </a>
+</div>
+
+{% if sims %}
+
+<!-- Stats summary -->
+<div class="stats-grid" style="margin-bottom:1.5rem">
+  <div class="stat-card stat-blue">
+    <div class="stat-icon"><i class="fas fa-database"></i></div>
+    <div class="stat-body"><div class="stat-value">{{ sims|length }}</div><div class="stat-label">Total Missions</div></div>
+  </div>
+  <div class="stat-card stat-green">
+    <div class="stat-icon"><i class="fas fa-percent"></i></div>
+    <div class="stat-body">
+      <div class="stat-value">{{ "%.1f"|format(sims|map(attribute='success_prob')|sum / sims|length) }}%</div>
+      <div class="stat-label">Avg Success</div>
+    </div>
+  </div>
+  <div class="stat-card stat-red">
+    <div class="stat-icon"><i class="fas fa-warning"></i></div>
+    <div class="stat-body">
+      <div class="stat-value">{{ sims|selectattr('risk_level','eq','High')|list|length }}</div>
+      <div class="stat-label">High Risk</div>
+    </div>
+  </div>
+  <div class="stat-card stat-amber">
+    <div class="stat-icon"><i class="fas fa-mountain"></i></div>
+    <div class="stat-body">
+      <div class="stat-value">{{ sims|map(attribute='terrain')|unique|list|length }}</div>
+      <div class="stat-label">Terrain Types</div>
+    </div>
+  </div>
+</div>
+
+<!-- Main table -->
+<div class="card">
+  <div class="card-header">
+    <span><i class="fas fa-table"></i> All Simulations</span>
+    <button class="btn btn-sm btn-outline" onclick="exportHistoryPDF()">
+      <i class="fas fa-file-pdf"></i> Export All
+    </button>
+  </div>
+  <div class="card-body">
+    <div class="table-wrap">
+      <table class="data-table" id="historyTable">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Mission</th>
+            <th>Date</th>
+            <th>Terrain</th>
+            <th>Weather</th>
+            <th>Enemies</th>
+            <th>Success %</th>
+            <th>Risk</th>
+            <th>Strategy</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for s in sims %}
+          <tr class="history-row"
+              data-terrain="{{ s.terrain }}"
+              data-risk="{{ s.risk_level }}"
+              data-name="{{ s.mission_name | lower }}">
+            <td class="mono-text">{{ loop.index }}</td>
+            <td class="mono-text">{{ s.mission_name }}</td>
+            <td class="mono-text" style="font-size:0.8rem">{{ s.created_at[:16] }}</td>
+            <td><span class="badge badge-terrain-{{ s.terrain }}">{{ s.terrain | title }}</span></td>
+            <td>{{ s.weather | title }}</td>
+            <td>{{ s.enemy_count }}</td>
+            <td>
+              <div class="prob-bar-wrap">
+                <div class="prob-bar" style="width:{{ s.success_prob }}%"></div>
+                <span>{{ s.success_prob }}%</span>
+              </div>
+            </td>
+            <td><span class="badge badge-risk-{{ s.risk_level | lower }}">{{ s.risk_level }}</span></td>
+            <td style="max-width:180px; font-size:0.82rem">{{ s.primary_strategy }}</td>
+            <td>
+              <div style="display:flex;gap:0.4rem;flex-wrap:wrap">
+                <a href="{{ url_for('simulation.result', sim_id=s.id) }}"
+                   class="btn btn-sm btn-outline" title="View">
+                  <i class="fas fa-eye"></i>
+                </a>
+                <!-- NEW: Direct PDF download per row -->
+                <a href="{{ url_for('report.generate_report', sim_id=s.id) }}"
+                   class="btn btn-sm btn-outline" title="Download PDF" target="_blank">
+                  <i class="fas fa-file-pdf"></i>
+                </a>
+                <button class="btn btn-sm btn-danger" title="Delete"
+                        onclick="deleteSimulation({{ s.id }}, this)">
+                  <i class="fas fa-trash"></i>
+                </button>
+              </div>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- Trend chart -->
+<div class="card" style="margin-top:1.5rem">
+  <div class="card-header"><span><i class="fas fa-chart-line"></i> Success Probability Trend</span></div>
+  <div class="card-body chart-container">
+    <canvas id="trendChart"></canvas>
+  </div>
+</div>
+
+<!-- Strategy Type Breakdown Chart (NEW) -->
+<div class="card" style="margin-top:1.5rem">
+  <div class="card-header">
+    <span><i class="fas fa-chess"></i> AI Prediction Accuracy (Outcome Feedback)</span>
+  </div>
+  <div class="card-body chart-container">
+    <canvas id="outcomeChart"></canvas>
+  </div>
+</div>
+
+{% else %}
+<div class="empty-state" style="height:400px">
+  <i class="fas fa-clock-rotate-left" style="font-size:4rem; color:var(--accent-amber); margin-bottom:1rem"></i>
+  <h2>No Simulations Yet</h2>
+  <p>Run your first tactical simulation to begin building mission history.</p>
+  <a href="{{ url_for('simulation.simulation') }}" class="btn btn-primary" style="margin-top:1rem">
+    <i class="fas fa-plus"></i> Start Simulation
+  </a>
+</div>
+{% endif %}
+
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+// ── Table search/filter ────────────────────────────────
+function filterTable() {
+  const search  = document.getElementById('searchInput').value.toLowerCase();
+  const terrain = document.getElementById('terrainFilter').value.toLowerCase();
+  const risk    = document.getElementById('riskFilter').value.toLowerCase();
+  document.querySelectorAll('.history-row').forEach(row => {
+    const nameMatch    = row.dataset.name.includes(search);
+    const terrainMatch = !terrain || row.dataset.terrain === terrain;
+    const riskMatch    = !risk    || row.dataset.risk.toLowerCase() === risk;
+    row.style.display  = (nameMatch && terrainMatch && riskMatch) ? '' : 'none';
+  });
+}
+
+// ── Delete simulation ─────────────────────────────────
+async function deleteSimulation(id, btn) {
+  if (!confirm('Delete this simulation permanently?')) return;
+  const res  = await fetch('/api/delete_simulation/' + id, { method: 'DELETE' });
+  const data = await res.json();
+  if (data.status === 'deleted') {
+    btn.closest('tr').style.transition = 'opacity 0.4s';
+    btn.closest('tr').style.opacity    = '0';
+    setTimeout(() => btn.closest('tr').remove(), 400);
+  }
+}
+
+// ── Trend Chart ────────────────────────────────────────
+{% if sims %}
+const simData = {{ sims | tojson }};
+const labels  = simData.map(s => s.mission_name.substring(0,12));
+const probs   = simData.map(s => s.success_prob);
+
+new Chart(document.getElementById('trendChart'), {
+  type: 'line',
+  data: {
+    labels: labels.reverse(),
+    datasets: [{
+      label: 'Success Probability %',
+      data: probs.reverse(),
+      borderColor: '#4a7c59',
+      backgroundColor: 'rgba(74,124,89,0.15)',
+      pointBackgroundColor: '#c8a84b',
+      tension: 0.3, fill: true
+    }]
+  },
+  options: {
+    plugins: { legend: { labels: { color:'#c8d8b4', font:{family:'Rajdhani'} } } },
+    scales: {
+      x: { ticks:{color:'#c8d8b4',font:{family:'Rajdhani'}}, grid:{color:'#2a3520'} },
+      y: { ticks:{color:'#c8d8b4',font:{family:'Rajdhani'}}, grid:{color:'#2a3520'},
+           beginAtZero:true, max:100 }
+    }
+  }
+});
+
+// ── NEW: Outcome Feedback Chart ─────────────────────────
+// Counts risk level distribution as proxy for outcome confidence
+const riskCounts = {Low:0, Medium:0, High:0};
+simData.forEach(s => { if (riskCounts[s.risk_level] !== undefined) riskCounts[s.risk_level]++; });
+const total = simData.length || 1;
+
+new Chart(document.getElementById('outcomeChart'), {
+  type: 'bar',
+  data: {
+    labels: ['Low Risk Ops', 'Medium Risk Ops', 'High Risk Ops'],
+    datasets: [
+      {
+        label: 'Simulations',
+        data: [riskCounts.Low, riskCounts.Medium, riskCounts.High],
+        backgroundColor: ['rgba(34,197,94,0.6)', 'rgba(245,158,11,0.6)', 'rgba(239,68,68,0.6)'],
+        borderColor:     ['#22c55e', '#f59e0b', '#ef4444'],
+        borderWidth: 1, borderRadius: 4
+      }
+    ]
+  },
+  options: {
+    plugins: { legend: { labels: { color:'#c8d8b4', font:{family:'Rajdhani'} } } },
+    scales: {
+      x: { ticks:{color:'#c8d8b4',font:{family:'Rajdhani'}}, grid:{color:'#2a3520'} },
+      y: { ticks:{color:'#c8d8b4',font:{family:'Rajdhani'}}, grid:{color:'#2a3520'},
+           beginAtZero:true }
+    }
+  }
+});
+{% endif %}
+
+// ── Bulk PDF Export (client-side) ─────────────────────
+function exportHistoryPDF() {
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ orientation:'landscape', unit:'mm', format:'a4' });
+  doc.setFont('helvetica','bold');
+  doc.setFontSize(16);
+  doc.text('ATDSS v2.5.0 — MISSION HISTORY REPORT', 148, 15, {align:'center'});
+  let y = 28;
+  doc.setFontSize(9);
+  doc.setFont('helvetica','bold');
+  doc.text(['#','Mission','Terrain','Weather','Enemies','Success%','Risk','Strategy'].join('    '), 10, y);
+  y += 6;
+  doc.setFont('helvetica','normal');
+  {% if sims %}
+  const rows = {{ sims | tojson }};
+  rows.forEach((s, i) => {
+    if (y > 185) { doc.addPage(); y = 20; }
+    const line = [
+      String(i+1).padEnd(3),
+      s.mission_name.substring(0,14).padEnd(15),
+      s.terrain.padEnd(8),
+      s.weather.padEnd(7),
+      String(s.enemy_count).padEnd(7),
+      (s.success_prob + '%').padEnd(9),
+      s.risk_level.padEnd(8),
+      s.primary_strategy.substring(0,30)
+    ].join(' ');
+    doc.text(line, 10, y);
+    y += 7;
+  });
+  {% endif %}
+  doc.setFont('helvetica','bold');
+  doc.text('CLASSIFIED — INDIAN ARMY AI DIVISION — ATDSS v2.5.0', 148, 200, {align:'center'});
+  doc.save('ATDSS_History_Report.pdf');
+}
+</script>
+{% endblock %}

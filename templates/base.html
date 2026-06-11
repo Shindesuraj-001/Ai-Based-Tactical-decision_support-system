@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>{% block title %}ATDSS — Indian Army{% endblock %}</title>
+
+  <!-- Google Fonts: Military aesthetic -->
+  <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=Share+Tech+Mono&family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet"/>
+
+  <!-- Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"/>
+
+  <!-- Leaflet CSS (Map) -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+
+  <!-- Main stylesheet -->
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}"/>
+
+  {% block extra_head %}{% endblock %}
+</head>
+
+<body>
+
+<!-- ═══════════════════════════════════════════════
+     SIDEBAR NAVIGATION
+════════════════════════════════════════════════ -->
+{% if session.get('user_id') %}
+<aside class="sidebar" id="sidebar">
+
+  <!-- Logo / Emblem -->
+  <div class="sidebar-header">
+    <div class="emblem-ring">
+      <i class="fas fa-shield-halved emblem-icon"></i>
+    </div>
+    <div class="sidebar-brand">
+      <span class="brand-title">ATDSS</span>
+      <span class="brand-sub">Indian Army · AI Division</span>
+    </div>
+  </div>
+
+  <!-- User Info -->
+  <div class="sidebar-user">
+    <div class="user-avatar">
+      <i class="fas fa-user-tie"></i>
+    </div>
+    <div class="user-info">
+      <span class="user-name">{{ session.get('username', 'Officer') | upper }}</span>
+      <span class="user-rank">{{ session.get('rank', 'Officer') }}</span>
+    </div>
+  </div>
+
+  <!-- Nav Links -->
+  <nav class="sidebar-nav">
+    <div class="nav-section-label">OPERATIONS</div>
+
+    <a href="{{ url_for('simulation.dashboard') }}"
+       class="nav-link {% if request.endpoint == 'simulation.dashboard' %}active{% endif %}">
+      <i class="fas fa-chart-line"></i>
+      <span>Command Centre</span>
+    </a>
+
+    <a href="{{ url_for('simulation.simulation') }}"
+       class="nav-link {% if request.endpoint == 'simulation.simulation' %}active{% endif %}">
+      <i class="fas fa-crosshairs"></i>
+      <span>New Simulation</span>
+    </a>
+
+    <a href="{{ url_for('history.history') }}"
+       class="nav-link {% if request.endpoint == 'history.history' %}active{% endif %}">
+      <i class="fas fa-clock-rotate-left"></i>
+      <span>Mission History</span>
+    </a>
+
+    <!-- ── NEW v2.6.0 ─────────────────────────────── -->
+    <a href="{{ url_for('battlefield.battlefield3d') }}"
+       class="nav-link {% if request.endpoint == 'battlefield.battlefield3d' %}active{% endif %}">
+      <i class="fas fa-cube"></i>
+      <span>3D Battlefield</span>
+    </a>
+    <!-- ─────────────────────────────────────────────── -->
+
+    <div class="nav-section-label" style="margin-top:1.5rem">SYSTEM</div>
+
+    <a href="{{ url_for('auth.logout') }}" class="nav-link nav-logout">
+      <i class="fas fa-right-from-bracket"></i>
+      <span>Secure Logout</span>
+    </a>
+  </nav>
+
+  <!-- Classification stamp -->
+  <div class="sidebar-classified">
+    <span>⬛ TOP SECRET</span><br>
+    <span class="mono-text">CLEARANCE LEVEL: ALPHA</span>
+  </div>
+
+</aside>
+
+<!-- Mobile menu toggle -->
+<button class="mobile-toggle" onclick="toggleSidebar()">
+  <i class="fas fa-bars"></i>
+</button>
+{% endif %}
+
+<!-- ═══════════════════════════════════════════════
+     MAIN CONTENT AREA
+════════════════════════════════════════════════ -->
+<main class="main-content {% if not session.get('user_id') %}full-width{% endif %}">
+
+  <!-- Top bar -->
+  {% if session.get('user_id') %}
+  <header class="topbar">
+    <div class="topbar-left">
+      <div class="scan-line-text">{% block page_title %}COMMAND CENTRE{% endblock %}</div>
+      <div class="topbar-breadcrumb">{% block breadcrumb %}Home{% endblock %}</div>
+    </div>
+    <div class="topbar-right">
+      <div class="status-indicator">
+        <span class="pulse-dot"></span>
+        <span class="mono-text">SYSTEM ONLINE</span>
+      </div>
+      <div class="mono-text topbar-time" id="topbarTime"></div>
+    </div>
+  </header>
+  {% endif %}
+
+  <!-- Flash messages -->
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+      <div class="flash-container">
+        {% for cat, msg in messages %}
+          <div class="flash flash-{{ cat }}">
+            <i class="fas fa-{% if cat == 'success' %}check-circle{% elif cat == 'error' %}exclamation-triangle{% else %}info-circle{% endif %}"></i>
+            {{ msg }}
+            <button onclick="this.parentElement.remove()">✕</button>
+          </div>
+        {% endfor %}
+      </div>
+    {% endif %}
+  {% endwith %}
+
+  <!-- Page content -->
+  <div class="page-content">
+    {% block content %}{% endblock %}
+  </div>
+
+</main>
+
+<!-- ═══════════════════════════════════════════════
+     SCRIPTS
+     NOTE: Leaflet.heat is loaded here globally so
+           simulation.html can use L.heatLayer()
+════════════════════════════════════════════════ -->
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<!-- ── NEW v2.6.0: Leaflet.heat for threat heatmap ── -->
+<script src="https://leaflet.github.io/Leaflet.heat/dist/leaflet-heat.js"></script>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
+<script src="{{ url_for('static', filename='js/main.js') }}"></script>
+{% block extra_scripts %}{% endblock %}
+
+</body>
+</html>

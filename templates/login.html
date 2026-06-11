@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>ATDSS — Secure Access Portal</title>
+  <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;600;700&family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&display=swap" rel="stylesheet"/>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"/>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}"/>
+</head>
+<body class="login-body">
+
+<!-- Animated scanlines overlay -->
+<div class="scan-overlay"></div>
+
+<!-- Grid background -->
+<div class="grid-bg"></div>
+
+<!-- Login container -->
+<div class="login-wrapper">
+
+  <!-- Left panel — emblem + info -->
+  <div class="login-left">
+    <div class="army-emblem-large">
+      <div class="emblem-outer-ring">
+        <div class="emblem-inner">
+          <i class="fas fa-shield-halved"></i>
+        </div>
+      </div>
+      <div class="emblem-rays"></div>
+    </div>
+
+    <h1 class="login-title">
+      <span class="title-line1">INDIAN ARMY</span>
+      <span class="title-line2">TACTICAL DECISION</span>
+      <span class="title-line3">SUPPORT SYSTEM</span>
+    </h1>
+
+    <div class="login-classified-banner">
+      <span>🔒 RESTRICTED ACCESS — AUTHORISED PERSONNEL ONLY</span>
+    </div>
+
+    <div class="login-features">
+      <div class="feat-item"><i class="fas fa-brain"></i> AI Strategy Engine</div>
+      <div class="feat-item"><i class="fas fa-table-columns"></i> Multi-Strategy Comparison</div>
+      <div class="feat-item"><i class="fas fa-chess-knight"></i> War Simulation Mode</div>
+      <div class="feat-item"><i class="fas fa-map"></i> Live Tactical Mapping</div>
+      <div class="feat-item"><i class="fas fa-cloud-sun"></i> Real-Time Weather Intel</div>
+      <div class="feat-item"><i class="fas fa-file-pdf"></i> Auto PDF Report</div>
+      <div class="feat-item"><i class="fas fa-chart-bar"></i> AI Learning System</div>
+      <div class="feat-item"><i class="fas fa-image"></i> Terrain Image Analysis</div>
+    </div>
+
+    <div class="login-version mono-text">v2.5.0 | SECURE CHANNEL | AES-256</div>
+  </div>
+
+  <!-- Right panel — login form -->
+  <div class="login-right">
+    <div class="login-card">
+
+      <div class="login-card-header">
+        <div class="header-line"></div>
+        <span class="mono-text">AUTHENTICATION REQUIRED</span>
+        <div class="header-line"></div>
+      </div>
+
+      <!-- Flash messages -->
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+          {% for cat, msg in messages %}
+            <div class="flash flash-{{ cat }}" style="margin-bottom:1rem;">
+              <i class="fas fa-exclamation-triangle"></i> {{ msg }}
+            </div>
+          {% endfor %}
+        {% endif %}
+      {% endwith %}
+
+      <form method="POST" action="{{ url_for('auth.login') }}" class="login-form">
+
+        <div class="form-group">
+          <label class="form-label mono-text">OPERATOR ID</label>
+          <div class="input-wrapper">
+            <i class="fas fa-user input-icon"></i>
+            <input type="text" name="username" class="form-input"
+                   placeholder="Enter operator ID" required
+                   autocomplete="username"/>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label mono-text">ACCESS CODE</label>
+          <div class="input-wrapper">
+            <i class="fas fa-lock input-icon"></i>
+            <input type="password" name="password" class="form-input"
+                   placeholder="Enter access code" required
+                   autocomplete="current-password"/>
+            <button type="button" class="toggle-pass" onclick="togglePassword(this)">
+              <i class="fas fa-eye"></i>
+            </button>
+          </div>
+        </div>
+
+        <button type="submit" class="btn btn-primary btn-login">
+          <i class="fas fa-unlock-keyhole"></i>
+          AUTHENTICATE &amp; ENTER
+        </button>
+
+      </form>
+
+      <!-- Demo credentials note -->
+      <div class="demo-creds mono-text">
+        <div>DEMO — admin / admin123</div>
+        <div>DEMO — officer1 / officer123</div>
+      </div>
+
+      <div class="login-footer mono-text">
+        ATDSS © 2024 | Indian Army AI Division<br/>
+        Unauthorised access is a criminal offence.
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  function togglePassword(btn) {
+    const inp = btn.closest('.input-wrapper').querySelector('input');
+    if (inp.type === 'password') {
+      inp.type = 'text';
+      btn.innerHTML = '<i class="fas fa-eye-slash"></i>';
+    } else {
+      inp.type = 'password';
+      btn.innerHTML = '<i class="fas fa-eye"></i>';
+    }
+  }
+
+  document.addEventListener('DOMContentLoaded', () => {
+    const lines = document.querySelectorAll('.title-line1, .title-line2, .title-line3');
+    lines.forEach((el, i) => {
+      el.style.animationDelay = `${i * 0.4}s`;
+      el.classList.add('type-anim');
+    });
+  });
+</script>
+
+</body>
+</html>

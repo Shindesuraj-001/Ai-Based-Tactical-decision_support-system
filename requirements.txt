@@ -1,0 +1,24 @@
+# =====================================================
+#  ATDSS — Python Requirements v2.5.0
+#  Install with: pip install -r requirements.txt
+# =====================================================
+
+flask>=3.0.0
+flask-session>=0.6.0
+
+# HTTP requests (for weather API)
+requests>=2.31.0
+
+# PDF generation
+reportlab>=4.0.0
+
+# Image processing (optional but recommended)
+# If OpenCV install fails, the system will use mock analysis
+opencv-python-headless>=4.8.0
+
+# For future ML expansion
+numpy>=1.24.0
+scikit-learn>=1.3.0
+
+# Pillow for basic image handling fallback
+Pillow>=10.0.0

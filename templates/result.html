@@ -1,0 +1,423 @@
+{% extends "base.html" %}
+
+{% block title %}{{ sim.mission_name }} — ATDSS{% endblock %}
+{% block page_title %}MISSION REPORT{% endblock %}
+{% block breadcrumb %}Home / History / {{ sim.mission_name }}{% endblock %}
+
+{% block content %}
+
+<div class="result-layout" id="reportContent">
+
+  <!-- Mission Header Banner -->
+  <div class="mission-banner">
+    <div class="banner-left">
+      <div class="mission-code mono-text">{{ sim.mission_name | upper }}</div>
+      <div class="mission-meta">
+        <span class="badge badge-terrain-{{ sim.terrain }}">{{ sim.terrain | title }}</span>
+        <span class="badge badge-risk-{{ sim.risk_level | lower }}">{{ sim.risk_level }} RISK</span>
+        <span class="mono-text" style="font-size:0.8rem;">{{ sim.created_at }}</span>
+        {% if sim.outcome %}
+        <span class="badge outcome-badge-{{ sim.outcome.outcome }}">
+          {{ sim.outcome.outcome | upper }}
+        </span>
+        {% endif %}
+      </div>
+    </div>
+    <div class="banner-right">
+      <div class="big-prob"
+           style="color:{% if sim.success_prob > 66 %}#22c55e{% elif sim.success_prob > 33 %}#f59e0b{% else %}#ef4444{% endif %}">
+        {{ sim.success_prob }}%
+      </div>
+      <div class="mono-text" style="font-size:0.75rem">SUCCESS PROBABILITY</div>
+    </div>
+  </div>
+
+  <div class="result-grid">
+
+    <!-- Primary Strategy -->
+    <div class="card card-glow result-span-2">
+      <div class="card-header">
+        <span><i class="fas fa-star"></i> PRIMARY BATTLE PLAN — PLAN A</span>
+      </div>
+      <div class="card-body">
+        <div class="strategy-main-lg">{{ sim.primary_strategy }}</div>
+        <div class="strategy-params">
+          <span><i class="fas fa-users"></i> {{ sim.enemy_count }} enemy units</span>
+          <span><i class="fas fa-mountain"></i> {{ sim.terrain | title }}</span>
+          <span><i class="fas fa-cloud"></i> {{ sim.weather | title }}</span>
+          <span><i class="fas fa-gun"></i> {{ sim.resources }}</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Alt Strategies -->
+    <div class="card">
+      <div class="card-header"><span>PLAN B — Alternative</span></div>
+      <div class="card-body">
+        <div class="alt-strategy-lg">{{ sim.alt_strategy1 }}</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header"><span>PLAN C — Contingency</span></div>
+      <div class="card-body">
+        <div class="alt-strategy-lg">{{ sim.alt_strategy2 }}</div>
+      </div>
+    </div>
+
+    <!-- Risk Gauge -->
+    <div class="card">
+      <div class="card-header"><span><i class="fas fa-gauge-high"></i> Risk Analysis</span></div>
+      <div class="card-body" style="text-align:center">
+        <canvas id="riskGaugeCanvas" width="200" height="110"></canvas>
+        <div class="mono-text" style="margin-top:0.5rem; color:var(--accent-amber)">
+          RISK SCORE: {{ sim.risk_score }}/100
+        </div>
+        <div class="badge badge-risk-{{ sim.risk_level | lower }}"
+             style="font-size:1rem; padding:0.4rem 1rem; margin-top:0.5rem">
+          {{ sim.risk_level }} RISK
+        </div>
+      </div>
+    </div>
+
+    <!-- Success Gauge -->
+    <div class="card">
+      <div class="card-header"><span><i class="fas fa-chart-line"></i> Success Probability</span></div>
+      <div class="card-body" style="text-align:center">
+        <canvas id="probGaugeCanvas" width="200" height="110"></canvas>
+        <div class="mono-text" style="margin-top:0.5rem; color:var(--accent-green)">
+          {{ sim.success_prob }}% MISSION SUCCESS
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ NEW: STRATEGY COMPARISON TABLE ══════════════════════ -->
+    {% if sim.strategy_comparison %}
+    <div class="card result-span-2">
+      <div class="card-header">
+        <span><i class="fas fa-table-columns"></i> MULTI-STRATEGY COMPARISON</span>
+        <span class="mono-text" style="font-size:0.7rem; color:var(--accent-green2)">
+          AI-Computed · ★ = Recommended
+        </span>
+      </div>
+      <div class="card-body" style="padding:0.8rem">
+        <div class="table-wrap">
+          <table class="comparison-table">
+            <thead>
+              <tr>
+                <th>Strategy Type</th><th>Name</th><th>Success %</th>
+                <th>Risk</th><th>Est. Time</th><th>Resources</th><th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for s in sim.strategy_comparison %}
+              <tr class="{% if s.is_recommended %}comparison-row-recommended{% endif %}">
+                <td>
+                  <span class="strategy-type-badge strat-{{ s.strategy_type | lower }}">
+                    {{ s.strategy_type }}
+                  </span>
+                </td>
+                <td class="mono-text" style="font-size:0.82rem">{{ s.strategy_name }}</td>
+                <td>
+                  <div class="prob-bar-wrap">
+                    <div class="prob-bar" style="width:{{ s.success_prob }}%"></div>
+                    <span>{{ s.success_prob }}%</span>
+                  </div>
+                </td>
+                <td>
+                  <span class="badge badge-risk-{{ s.risk_level | lower }}">{{ s.risk_level }}</span>
+                </td>
+                <td class="mono-text" style="font-size:0.78rem">{{ s.estimated_time }}</td>
+                <td>
+                  <span class="resource-badge res-{{ s.resource_usage | lower | replace(' ','-') }}">
+                    {{ s.resource_usage }}
+                  </span>
+                </td>
+                <td>
+                  {% if s.is_recommended %}
+                    <span class="best-strategy-badge">★ BEST</span>
+                  {% else %}
+                    <span style="color:var(--text-dim)">—</span>
+                  {% endif %}
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- Map -->
+    <div class="card result-span-2">
+      <div class="card-header"><span><i class="fas fa-map"></i> Tactical Map</span></div>
+      <div class="card-body" style="padding:0">
+        <div id="resultMap" style="height:350px; width:100%;"></div>
+      </div>
+    </div>
+
+    <!-- Intel Images -->
+    {% if sim.images %}
+    <div class="card result-span-2">
+      <div class="card-header"><span><i class="fas fa-images"></i> Intelligence Images</span></div>
+      <div class="card-body">
+        <div class="intel-images-grid">
+          {% for img in sim.images %}
+          <div class="intel-img-wrap">
+            <img src="{{ img }}" alt="intel image" class="intel-img"/>
+            <div class="intel-img-label mono-text">INTEL IMAGE {{ loop.index }}</div>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- Analysis Notes -->
+    <div class="card result-span-2">
+      <div class="card-header">
+        <span><i class="fas fa-file-lines"></i> Tactical Assessment Report</span>
+      </div>
+      <div class="card-body">
+        <pre class="analysis-notes mono-text">{{ sim.analysis_notes }}</pre>
+      </div>
+    </div>
+
+    <!-- Factor Chart -->
+    <div class="card">
+      <div class="card-header"><span><i class="fas fa-chart-bar"></i> Factor Analysis</span></div>
+      <div class="card-body chart-container">
+        <canvas id="factorChart"></canvas>
+      </div>
+    </div>
+
+    <!-- Radar Chart -->
+    <div class="card">
+      <div class="card-header"><span><i class="fas fa-chart-radar"></i> Capability Radar</span></div>
+      <div class="card-body chart-container">
+        <canvas id="radarChart"></canvas>
+      </div>
+    </div>
+
+    <!-- ══ NEW: AI LEARNING — OUTCOME RECORDER ══════════════ -->
+    <div class="card result-span-2">
+      <div class="card-header">
+        <span><i class="fas fa-brain"></i> AI LEARNING — RECORD MISSION OUTCOME</span>
+        <span class="mono-text" style="font-size:0.7rem; color:var(--text-muted)">
+          Your feedback improves future AI predictions
+        </span>
+      </div>
+      <div class="card-body">
+        {% if sim.outcome %}
+        <div class="outcome-recorded">
+          <i class="fas fa-check-circle" style="color:var(--accent-green2); font-size:1.2rem"></i>
+          <span>Outcome recorded:
+            <strong class="outcome-badge-{{ sim.outcome.outcome }}">
+              {{ sim.outcome.outcome | upper }}
+            </strong>
+          </span>
+          <span style="font-size:0.8rem; color:var(--text-dim)">
+            — {{ sim.outcome.feedback_notes or 'No notes' }}
+          </span>
+        </div>
+        {% else %}
+        <div class="outcome-recorder" id="outcomeRecorder">
+          <p style="color:var(--text-muted); font-size:0.9rem; margin-bottom:0.8rem">
+            Was this strategy effective? Your feedback trains the AI learning model.
+          </p>
+          <div class="outcome-buttons">
+            <button class="btn outcome-btn success-btn" onclick="recordOutcome('success')">
+              <i class="fas fa-check-circle"></i> Mission Success
+            </button>
+            <button class="btn outcome-btn partial-btn" onclick="recordOutcome('partial')">
+              <i class="fas fa-circle-half-stroke"></i> Partial Success
+            </button>
+            <button class="btn outcome-btn failure-btn" onclick="recordOutcome('failure')">
+              <i class="fas fa-times-circle"></i> Mission Failed
+            </button>
+          </div>
+          <div class="form-group" style="margin-top:0.8rem">
+            <input type="text" id="feedbackNotes" class="form-input"
+                   placeholder="Optional: Add feedback notes for AI training..."/>
+          </div>
+        </div>
+        <div id="outcomeSaved" style="display:none" class="outcome-recorded">
+          <i class="fas fa-check-circle" style="color:var(--accent-green2); font-size:1.2rem"></i>
+          <span>Outcome saved! AI model will adapt predictions for similar scenarios.</span>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+
+  </div><!-- /result-grid -->
+
+  <!-- Action Buttons -->
+  <div class="action-buttons" style="margin-top:1.5rem">
+    <a href="/api/generate_report/{{ sim.id }}" class="btn btn-primary" target="_blank">
+      <i class="fas fa-file-pdf"></i> Download Full PDF Report
+    </a>
+    <button class="btn btn-outline" onclick="exportFullPDF()">
+      <i class="fas fa-print"></i> Quick PDF
+    </button>
+    <a href="{{ url_for('history.history') }}" class="btn btn-outline">
+      <i class="fas fa-arrow-left"></i> Back to History
+    </a>
+    <a href="{{ url_for('simulation.simulation') }}" class="btn btn-outline">
+      <i class="fas fa-plus"></i> New Simulation
+    </a>
+  </div>
+
+</div>
+
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+const SIM = {
+  id:         {{ sim.id }},
+  lat:        {{ sim.lat }},
+  lng:        {{ sim.lng }},
+  risk_score: {{ sim.risk_score }},
+  success:    {{ sim.success_prob }},
+  mission:    "{{ sim.mission_name }}",
+  strategy:   "{{ sim.primary_strategy | replace('"', '') }}",
+  risk_level: "{{ sim.risk_level }}"
+};
+
+// ── Gauges ────────────────────────────────────────────────
+function drawArcGauge(canvasId, value, maxVal, color) {
+  const canvas = document.getElementById(canvasId);
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const cx = canvas.width/2, cy = canvas.height - 10, r = 80;
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  ctx.beginPath(); ctx.arc(cx,cy,r,Math.PI,0);
+  ctx.strokeStyle='#2a3520'; ctx.lineWidth=14; ctx.stroke();
+  const angle = Math.PI * (value/maxVal);
+  ctx.beginPath(); ctx.arc(cx,cy,r,Math.PI,Math.PI+angle);
+  ctx.strokeStyle=color; ctx.lineWidth=14; ctx.stroke();
+  ctx.fillStyle='#c8d8b4'; ctx.font='bold 18px Orbitron';
+  ctx.textAlign='center'; ctx.fillText(Math.round(value), cx, cy-20);
+}
+
+drawArcGauge('riskGaugeCanvas', SIM.risk_score, 100,
+  SIM.risk_level==='High'?'#ef4444':SIM.risk_level==='Medium'?'#f59e0b':'#22c55e');
+drawArcGauge('probGaugeCanvas', SIM.success, 100,
+  SIM.success>66?'#22c55e':SIM.success>33?'#f59e0b':'#ef4444');
+
+// ── Map ───────────────────────────────────────────────────
+const map = L.map('resultMap').setView([SIM.lat, SIM.lng], 7);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+const enemyIcon = L.divIcon({
+  html:'<div class="map-marker enemy-marker"><i class="fas fa-skull-crossbones"></i></div>',
+  className:'',iconSize:[36,36],iconAnchor:[18,18]
+});
+L.marker([SIM.lat, SIM.lng], {icon:enemyIcon}).addTo(map)
+  .bindPopup(`<b>${SIM.mission}</b><br>${SIM.strategy}`).openPopup();
+L.circle([SIM.lat, SIM.lng], {
+  color:SIM.risk_level==='High'?'#ef4444':SIM.risk_level==='Medium'?'#f59e0b':'#22c55e',
+  fillOpacity:0.15, radius:25000
+}).addTo(map);
+
+// ── Factor Chart ──────────────────────────────────────────
+new Chart(document.getElementById('factorChart'), {
+  type:'bar',
+  data:{
+    labels:['Success %','Risk Score','Enemy Force','Terrain Diff','Weather Impact'],
+    datasets:[{
+      data:[SIM.success, SIM.risk_score, Math.min(100,{{ sim.enemy_count }}*0.8), 60, 40],
+      backgroundColor:['#22c55e','#ef4444','#f59e0b','#6b7a99','#4a7c59'],
+      borderRadius:4
+    }]
+  },
+  options:{
+    plugins:{legend:{display:false}},
+    scales:{
+      x:{ticks:{color:'#c8d8b4',font:{family:'Rajdhani'}},grid:{color:'#2a3520'}},
+      y:{ticks:{color:'#c8d8b4',font:{family:'Rajdhani'}},grid:{color:'#2a3520'},
+         beginAtZero:true,max:100}
+    }
+  }
+});
+
+// ── Radar Chart ───────────────────────────────────────────
+new Chart(document.getElementById('radarChart'), {
+  type:'radar',
+  data:{
+    labels:['Firepower','Mobility','Concealment','Intel','Logistics','Morale'],
+    datasets:[{
+      label:'Mission Capability',
+      data:[Math.min(100,SIM.success*1.1), Math.max(10,100-SIM.risk_score), 70,65,60,80],
+      borderColor:'#4a7c59', backgroundColor:'rgba(74,124,89,0.2)',
+      pointBackgroundColor:'#c8a84b'
+    }]
+  },
+  options:{
+    plugins:{legend:{labels:{color:'#c8d8b4',font:{family:'Rajdhani'}}}},
+    scales:{r:{
+      grid:{color:'#2a3520'},
+      ticks:{color:'#c8d8b4',backdropColor:'transparent'},
+      pointLabels:{color:'#c8d8b4',font:{family:'Rajdhani',size:11}}
+    }}
+  }
+});
+
+// ── NEW: Outcome Recording (AI Learning Feed) ─────────────
+async function recordOutcome(outcome) {
+  const notes = document.getElementById('feedbackNotes')?.value || '';
+  try {
+    const resp = await fetch('/api/record_outcome', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({sim_id: SIM.id, outcome, feedback: notes})
+    });
+    const data = await resp.json();
+    if (data.status === 'saved') {
+      document.getElementById('outcomeRecorder').style.display = 'none';
+      document.getElementById('outcomeSaved').style.display    = 'flex';
+    }
+  } catch(e) {
+    alert('Could not save outcome: ' + e.message);
+  }
+}
+
+// ── Quick PDF Export ──────────────────────────────────────
+function exportFullPDF() {
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({orientation:'portrait', unit:'mm', format:'a4'});
+  let y = 15;
+  doc.setFillColor(20,30,10); doc.rect(0,0,210,297,'F');
+  doc.setTextColor(200,168,75); doc.setFont('helvetica','bold'); doc.setFontSize(20);
+  doc.text('TACTICAL DECISION SUPPORT SYSTEM', 105, y, {align:'center'}); y+=10;
+  doc.setFontSize(14);
+  doc.text('MISSION REPORT — ' + SIM.mission, 105, y, {align:'center'}); y+=15;
+  doc.setFontSize(11); doc.setFont('helvetica','normal'); doc.setTextColor(200,216,180);
+  doc.text('Primary Strategy: ' + SIM.strategy, 15, y); y+=8;
+  doc.text('Success Probability: ' + SIM.success + '%', 15, y); y+=8;
+  doc.text('Risk Level: ' + SIM.risk_level + ' (Score: ' + SIM.risk_score + '/100)', 15, y); y+=8;
+  doc.text('Terrain: {{ sim.terrain | title }} | Weather: {{ sim.weather | title }}', 15, y); y+=8;
+  doc.text('Enemy Count: {{ sim.enemy_count }}', 15, y); y+=8;
+  doc.text('Resources: {{ sim.resources }}', 15, y); y+=12;
+
+  {% if sim.strategy_comparison %}
+  doc.setFont('helvetica','bold'); doc.text('STRATEGY COMPARISON:', 15, y); y+=6;
+  doc.setFont('helvetica','normal'); doc.setFontSize(9);
+  {% for s in sim.strategy_comparison %}
+  const line{{ loop.index }} = `{{ s.strategy_type }}: {{ s.strategy_name }} | {{ s.success_prob }}% | {{ s.risk_level }} | {{ s.estimated_time }}{% if s.is_recommended %} ★ BEST{% endif %}`;
+  doc.text(line{{ loop.index }}, 18, y); y+=6;
+  {% endfor %}
+  y += 4;
+  {% endif %}
+
+  doc.setFont('helvetica','bold'); doc.setFontSize(11); doc.text('TACTICAL ASSESSMENT:', 15, y); y+=6;
+  doc.setFont('helvetica','normal'); doc.setFontSize(9);
+  const notes = `{{ sim.analysis_notes | replace('\n', ' ') | replace('"', '') }}`;
+  const noteLines = doc.splitTextToSize(notes, 180);
+  doc.text(noteLines, 15, y); y += noteLines.length * 5 + 10;
+  doc.setFont('helvetica','bold');
+  doc.text('CLASSIFIED — INDIAN ARMY AI DIVISION — ATDSS v2.5.0', 105, 285, {align:'center'});
+  doc.save(SIM.mission + '_QuickReport.pdf');
+}
+</script>
+{% endblock %}
